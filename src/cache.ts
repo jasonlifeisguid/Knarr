@@ -50,9 +50,11 @@ export function clearCache(): void {
 }
 
 /** Cache path for a rom image asset (cover or screenshot). The server path is
- *  hashed into the filename so multiple assets per rom don't collide. */
+ *  hashed into the filename so multiple assets per rom don't collide. The query
+ *  string is part of the hash: RomM appends ?ts=<updated_at> to cover paths, so
+ *  a replaced cover gets a new cache file instead of the old image forever. */
 export function assetCachePath(romId: number, serverPath: string): string {
   const ext = path.extname(new URL(serverPath, 'http://x').pathname) || '.png';
-  const hash = crypto.createHash('sha1').update(serverPath.split('?')[0]).digest('hex').slice(0, 8);
+  const hash = crypto.createHash('sha1').update(serverPath).digest('hex').slice(0, 8);
   return path.join(coversDir(), `${romId}-${hash}${ext}`);
 }

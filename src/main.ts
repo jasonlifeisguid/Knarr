@@ -592,12 +592,9 @@ function registerIpc(): void {
       backgroundRefresh(key, () => deltaRefreshRoms(platformId, cached), 'library:roms-updated', { platformId });
       return { roms: cached.data, fromCache: true, fetchedAt: cached.fetchedAt };
     }
-    if (cached) {
-      // Explicit refresh: delta sync is enough (falls back to full on count mismatch)
-      const roms = await deltaRefreshRoms(platformId, cached);
-      return { roms, fromCache: false, fetchedAt: Date.now() };
-    }
-    // No cache yet: full fetch (progress streamed to the renderer per page)
+    // No cache yet, or an explicit Refresh: full fetch (progress streamed to the
+    // renderer per page). Refresh doesn't use the delta: updated_after compares
+    // against this machine's clock, and edits that don't bump updated_at slip past it.
     const roms = await refreshRoms(platformId, true);
     return { roms, fromCache: false, fetchedAt: Date.now() };
   });

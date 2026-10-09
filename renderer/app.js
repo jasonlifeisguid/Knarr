@@ -858,7 +858,7 @@ window.r2sd.onRomsProgress(({ platformId, page, loaded, total }) => {
   renderGrid(); // cheap now: only the rows on screen are built
   $('grid-status').hidden = false;
   $('grid-status').textContent = loaded < total
-    ? `Loading library from server (first time only)… ${loaded} / ${total}`
+    ? `Loading library from server… ${loaded} / ${total}`
     : '';
   if (loaded >= total) $('grid-status').hidden = true;
 });

@@ -41,7 +41,10 @@ body {
 }
 .sidebar-header-actions { display: flex; gap: 6px; }
 
-.brand { font-weight: 700; letter-spacing: 1px; color: var(--accent); font-size: 1.1rem; }
+.brand { font-weight: 700; letter-spacing: 0.5px; color: var(--text); font-size: 1.15rem; display: inline-flex; align-items: center; gap: 7px; }
+/* The mark and the K take the theme's accent; "narr" the text colour (the logo's gold K, per theme). */
+.brand-mark { color: var(--accent); flex: none; }
+.brand-k { color: var(--accent); }
 
 .platform-list { flex: 1; overflow-y: auto; padding: 8px; }
 

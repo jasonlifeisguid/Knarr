@@ -13,7 +13,8 @@
  *    its output).
  *
  * Every archive is extracted into a private staging folder inside the install
- * path (`.r2sd-extract-<romId>/`) and only then moved to its final name. That
+ * path (`.r2sd-extract-<romId>/`; the 2.x name is kept, so a download left half-done by
+ * 2.x is still found and cleaned up) and only then moved to its final name. That
  * gives each game exactly one folder regardless of how the archive was laid
  * out: a single top-level directory is moved as-is; a flat archive (files at
  * the root) or one with several top-level entries becomes `<rom name>/`.
@@ -35,6 +36,7 @@ import { isInsideFolder, safeFileName, sanitizeForMatch, sanitizeFolderName } fr
 
 import { sevenZipPath } from './sevenzip';
 import { pumpToFile, PumpHooks, PumpOptions, PumpResult } from './pump';
+import * as brand from './brand';
 
 export interface DownloadRecord {
   romId: number;
@@ -369,7 +371,7 @@ interface Transfer {
 class WorkerUnavailable extends Error {}
 
 let workerScript = path.join(__dirname, 'download-worker.js');
-let workerDisabled = process.env.R2SD_DOWNLOAD_WORKER === '0'; // escape hatch for debugging
+let workerDisabled = brand.env('DOWNLOAD_WORKER') === '0'; // escape hatch for debugging (KNARR_ / R2SD_DOWNLOAD_WORKER=0)
 let lastTransferKind: Transfer['kind'] | null = null;
 
 export function setDownloadWorkerForTests(opts: { script?: string; disabled?: boolean } | null): void {
@@ -502,6 +504,7 @@ export async function startDownload(
   // Range/If-Range. RomM serves single-file roms from disk with range support
   // (206 Partial Content); multi-file roms are zipped on the fly and ignore
   // Range (200) — detected per response, in which case we restart from byte 0.
+  // 2.x name kept: a download paused by 2.x resumes after the upgrade
   const resumeMetaPath = path.join(archiveDir, `.r2sd-resume-${rom.id}.json`);
   const readResumeMeta = (): { fileName: string; etag: string; partPath: string } | null => {
     try {

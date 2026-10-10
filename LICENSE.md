@@ -1,9 +1,9 @@
-Required Notice: Copyright (c) 2026 jasonlifeisguid (https://github.com/jasonlifeisguid/RomM2SteamDeck)
+Required Notice: Copyright (c) 2026 jasonlifeisguid (https://github.com/jasonlifeisguid/Knarr)
 
-RomM2SteamDeck is licensed under the PolyForm Noncommercial License 1.0.0,
-reproduced verbatim below. In short: free to use, copy, modify and share for
-noncommercial purposes; not for sale or any commercial use. The name
-"RomM2SteamDeck" and the "R2SD" mark are not licensed — see the README.
+Knarr (formerly RomM2SteamDeck) is licensed under the PolyForm Noncommercial
+License 1.0.0, reproduced verbatim below. In short: free to use, copy, modify and
+share for noncommercial purposes; not for sale or any commercial use. The name
+"Knarr" and the Knarr mark are not licensed — see the README.
 
 ---
 

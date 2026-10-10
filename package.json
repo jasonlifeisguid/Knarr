@@ -1,8 +1,8 @@
 {
-  "name": "romm2steamdeck-app",
-  "productName": "RomM2SteamDeck",
-  "version": "2.2.38",
-  "description": "Desktop client for browsing and downloading from a RomM library",
+  "name": "knarr",
+  "productName": "Knarr",
+  "version": "3.0.0",
+  "description": "Knarr: your RomM library, ready to play. An unofficial desktop client for RomM.",
   "main": "dist/main.js",
   "author": "jasonlifeisguid",
   "license": "PolyForm-Noncommercial-1.0.0",
@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "com.lifeisguid.romm2steamdeck",
-    "productName": "RomM2SteamDeck",
+    "productName": "Knarr",
     "copyright": "Copyright © 2026 jasonlifeisguid",
     "directories": {
       "output": "release",
@@ -30,6 +30,7 @@
     "files": [
       "dist/**/*",
       "renderer/**/*",
+      "assets/**/*",
       "package.json"
     ],
     "win": {
@@ -66,15 +67,16 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "RomM2SteamDeck"
+      "shortcutName": "Knarr",
+      "artifactName": "Knarr-Setup-${version}.exe"
     },
     "portable": {
-      "artifactName": "RomM2SteamDeck-${version}-portable.exe"
+      "artifactName": "Knarr-${version}-portable.exe"
     },
     "linux": {
       "icon": "build/icon.png",
       "category": "Game",
-      "artifactName": "RomM2SteamDeck.AppImage",
+      "artifactName": "Knarr.AppImage",
       "target": [
         "AppImage"
       ],
@@ -90,7 +92,8 @@
           "from": "vendor/7zip/License.txt",
           "to": "7zip/License.txt"
         }
-      ]
+      ],
+      "executableName": "knarr"
     },
     "mac": {
       "icon": "build/icon.icns",

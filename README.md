@@ -1,38 +1,53 @@
-# RomM2SteamDeck
+<p align="center"><img src="docs/branding/knarr-banner.png" alt="Knarr: your RomM library, ready to play" width="720"></p>
+
+# Knarr
+
+*Said "nar" (the Norse original sounds the K: "k-nar"). Formerly **RomM2SteamDeck** (R2SD).*
+
+A knarr was the Viking cargo ship that crossed open sea to carry goods home. Knarr carries your games from your RomM server to wherever you play. Its mark is a merchant's mark, the symbol traders branded onto their cargo; look between its lines and you'll find a ship.
 
 A native desktop app for browsing and downloading games from your [RomM](https://github.com/rommapp/romm) library to your **Steam Deck**, **Windows PC**, **Linux**, or **macOS** machine. Browse your collection by platform, download on demand, auto-extract Windows games, and play them — directly through [Faugus Launcher](https://github.com/Faugus/faugus-launcher) on Linux, or by adding them to Steam. It can also add itself to your Steam library for Game Mode.
 
 Built with Electron. No Python, no browser, no local web server, and no system 7-Zip — everything is bundled.
 
-> **Upgrading from the old (Python/Flask) version?** This is a full rewrite as a native app. Uninstall/ignore the old browser-based build; its data lived in `romm2steamdeck` — this app uses a separate `romm2steamdeck-app` folder, so nothing collides.
+Knarr is an unofficial client for RomM; it is not affiliated with the RomM project.
+
+> **Upgrading from RomM2SteamDeck 2.x?** Knarr 3.0 is the same app under its new name, and the upgrade is automatic:
+> - **Settings, downloads and save history** move to the new `knarr` settings folder on first start. If that ever can't happen, Knarr keeps using the old folder, so nothing is lost.
+> - **Your Steam shortcut** is repointed at Knarr and given Knarr's library artwork: playtime and collections stay. If Steam is running and the change can't be made live, Knarr says so once; exit Steam and start Knarr again, or use **Settings → Add Knarr to Steam**.
+> - **Windows:** the Knarr installer replaces RomM2SteamDeck in place.
+> - **Linux:** the AppImage is now `Knarr.AppImage`. The "Run with Faugus" Open With entry is moved over to it.
+> - **Cloud saves** made by 2.x are found as before.
+>
+> **Upgrading from the old (Python/Flask) version?** That was a different app. Uninstall/ignore the old browser-based build; its data lived in `romm2steamdeck`, and Knarr uses its own `knarr` folder, so nothing collides.
 
 ---
 
 ## Download & run
 
-Grab the file for your system from the [**Releases**](https://github.com/jasonlifeisguid/RomM2SteamDeck/releases) page.
+Grab the file for your system from the [**Releases**](https://github.com/jasonlifeisguid/Knarr/releases) page.
 
-### Steam Deck / Linux — `RomM2SteamDeck.AppImage`
+### Steam Deck / Linux — `Knarr.AppImage`
 
-1. Download `RomM2SteamDeck.AppImage`.
+1. Download `Knarr.AppImage`.
 2. Make it executable (once):
    ```bash
-   chmod +x RomM2SteamDeck.AppImage
+   chmod +x Knarr.AppImage
    ```
    (or right-click → Properties → Permissions → *Is executable*)
 3. Run it — double-click, or:
    ```bash
-   ./RomM2SteamDeck.AppImage
+   ./Knarr.AppImage
    ```
 
-No dependencies to install. The AppImage uses the static runtime, so it runs on both FUSE 2 systems (SteamOS) and FUSE 3-only distros (Arch, Omarchy, CachyOS, Ubuntu 24.04+) without installing `libfuse2`. If your system has no FUSE at all, run it with `./RomM2SteamDeck.AppImage --appimage-extract-and-run`.
+No dependencies to install. The AppImage uses the static runtime, so it runs on both FUSE 2 systems (SteamOS) and FUSE 3-only distros (Arch, Omarchy, CachyOS, Ubuntu 24.04+) without installing `libfuse2`. If your system has no FUSE at all, run it with `./Knarr.AppImage --appimage-extract-and-run`.
 
-**Tip for updates:** keep the file named `RomM2SteamDeck.AppImage` (no version number) and just overwrite it — that way your Steam shortcut keeps working across updates.
+**Tip for updates:** keep the file named `Knarr.AppImage` (no version number) and just overwrite it — that way your Steam shortcut keeps working across updates.
 
 ### Windows — installer or portable
 
-- **`RomM2SteamDeck-Setup-x.y.z.exe`** — standard installer (Start-menu shortcut, uninstaller).
-- **`RomM2SteamDeck-x.y.z-portable.exe`** — single file, no install; just run it.
+- **`Knarr-Setup-x.y.z.exe`** — standard installer (Start-menu shortcut, uninstaller).
+- **`Knarr-x.y.z-portable.exe`** — single file, no install; just run it.
 
 The builds are unsigned, so Windows SmartScreen may warn on first run — click **More info → Run anyway**.
 
@@ -76,7 +91,7 @@ Any configured folder is protected: the app will refuse to delete it even if a g
 - **Search**, **genre filter**, and **sort** (name / date added / size / release year / rating / installed first, ascending or descending) at the top; toggle between grid and list views.
 - The **✓ Installed** toolbar button filters to games you have on disk — it stacks with search, genre and sort, and while it's on the sidebar counts show installed games per platform (platforms with none fade). The choice is remembered, so on the Deck it makes a handy "what can I play" view.
 - Click a game for details, cover, screenshots and the download button. Right-click (or the hover buttons on a tile) for quick actions.
-- Downloads run one at a time through a queue; the bar at the bottom shows progress and lets you cancel or drop queued items. Interrupted downloads **resume** where they stopped, even after restarting the app. Before downloading, R2SD checks there's room for the archive *and* the extracted game, and before unpacking it checks the archive's real size — a full drive is reported up front ("needs 40 GB, 12 GB free") instead of failing halfway. A failed extraction cleans up after itself, including the archive, and half-extracted leftovers from a crash are removed the next time you open the platform.
+- Downloads run one at a time through a queue; the bar at the bottom shows progress and lets you cancel or drop queued items. Interrupted downloads **resume** where they stopped, even after restarting the app. Before downloading, Knarr checks there's room for the archive *and* the extracted game, and before unpacking it checks the archive's real size — a full drive is reported up front ("needs 40 GB, 12 GB free") instead of failing halfway. A failed extraction cleans up after itself, including the archive, and half-extracted leftovers from a crash are removed the next time you open the platform.
 - The library is cached locally and refreshed in the background, so opening a platform is instant after the first load. If a background refresh fails (bad login, server down) the sidebar tells you instead of spinning forever.
 
 ### Controller navigation
@@ -100,15 +115,15 @@ Windows games (RomM's *Windows* platform, or any platform you've set to **Extrac
 
 - **On Windows**, Play runs the executable directly.
 - **On Linux / Steam Deck**, a Windows `.exe` needs Proton. You have two routes:
-- **While the game runs, R2SD gets out of the way.** The Gamepad API keeps feeding a controller's presses to every window that polls it, so a game's A-button used to land on R2SD's library too. Now R2SD ignores the controller while a game launched from Play is running (and whenever its window isn't focused), and minimizes itself until the game exits (**Settings → Display → On Play** to keep it open instead). Under gamescope on the Deck nothing is minimized — the compositor switches to the game itself.
-- **Hyprland (Omarchy and friends): optionally give the game its own workspace.** Hyprland has no minimize, so on a tiling setup a launched game lands beside the library window. **Settings → Display → On Play** can fix that: *Own workspace, fullscreen* or *Own workspace* makes R2SD watch for the game's windows after Play (recognised by process ancestry, several forks below Faugus), move the first one to a fresh workspace, follow it there, and take focus back when the game exits; splash dialogs are moved but left windowed. The default is *Leave to Hyprland* — if you've turned tiling off, or you simply want your compositor to decide, R2SD doesn't touch the window and just minimizes itself. Works with both the Lua-config dispatcher dialect (Hyprland 0.56+) and the classic one.
+- **While the game runs, Knarr gets out of the way.** The Gamepad API keeps feeding a controller's presses to every window that polls it, so a game's A-button used to land on Knarr's library too. Now Knarr ignores the controller while a game launched from Play is running (and whenever its window isn't focused), and minimizes itself until the game exits (**Settings → Display → On Play** to keep it open instead). Under gamescope on the Deck nothing is minimized — the compositor switches to the game itself.
+- **Hyprland (Omarchy and friends): optionally give the game its own workspace.** Hyprland has no minimize, so on a tiling setup a launched game lands beside the library window. **Settings → Display → On Play** can fix that: *Own workspace, fullscreen* or *Own workspace* makes Knarr watch for the game's windows after Play (recognised by process ancestry, several forks below Faugus), move the first one to a fresh workspace, follow it there, and take focus back when the game exits; splash dialogs are moved but left windowed. The default is *Leave to Hyprland* — if you've turned tiling off, or you simply want your compositor to decide, Knarr doesn't touch the window and just minimizes itself. Works with both the Lua-config dispatcher dialect (Hyprland 0.56+) and the classic one.
 
 ### Route A — Faugus Launcher (recommended: install once, then just press Play)
 
 Install [Faugus Launcher](https://github.com/Faugus/faugus-launcher) as a system package, as an AppImage in `~/Applications`, or as the Flatpak. When it's present, **▶ Play** hands the `.exe` to Faugus, which runs it through UMU/Proton with your Faugus default runner. No Steam step, no per-game setup.
 
-- **Each game gets its own prefix.** On first Play, R2SD adds the game to Faugus's library exactly as Faugus's own *Add game* dialog would — title, executable, its own prefix under `~/Faugus/<game>/`, your Faugus default runner, and the RomM cover as artwork — then launches that entry. Saves and configs stay isolated per game (see *Finding your saves* below), and the game shows up in Faugus too. Games you had already added in Faugus are reused, matched by executable. Prefer one shared prefix for everything? **Settings → Display → Prefix → Shared**.
-- R2SD only adds entries while Faugus's window is closed (Faugus keeps its list in memory and would overwrite the addition on its next save). If it's open, Play runs the game in the shared prefix once and tells you.
+- **Each game gets its own prefix.** On first Play, Knarr adds the game to Faugus's library exactly as Faugus's own *Add game* dialog would — title, executable, its own prefix under `~/Faugus/<game>/`, your Faugus default runner, and the RomM cover as artwork — then launches that entry. Saves and configs stay isolated per game (see *Finding your saves* below), and the game shows up in Faugus too. Games you had already added in Faugus are reused, matched by executable. Prefer one shared prefix for everything? **Settings → Display → Prefix → Shared**.
+- Knarr only adds entries while Faugus's window is closed (Faugus keeps its list in memory and would overwrite the addition on its next save). If it's open, Play runs the game in the shared prefix once and tells you.
 - Turn Faugus routing off in **Settings → Display → Faugus** if you'd rather always go through Steam.
 
 ### Route B — Add to Steam (Proton via Steam)
@@ -116,20 +131,20 @@ Install [Faugus Launcher](https://github.com/Faugus/faugus-launcher) as a system
 Open the game's **Add to Steam / Shortcut…** dialog, pick the executable, and choose **Add to Steam**. Then launch it from Steam.
 
 - **With Steam running** on SteamOS, the shortcut is added live through Valve's own `steam://addnonsteamgame` mechanism, so it works in Game Mode.
-- **With Decky Loader installed**, R2SD also configures the new shortcut live through Steam's own client API: it sets the real game name, uploads the RomM cover as the library artwork, and — if you leave **Run with Proton Experimental** ticked — forces Proton for it. The confirmation toast tells you what was applied.
+- **With Decky Loader installed**, Knarr also configures the new shortcut live through Steam's own client API: it sets the real game name, uploads the RomM cover as the library artwork, and — if you leave **Run with Proton Experimental** ticked — forces Proton for it. The confirmation toast tells you what was applied.
 - **Without Decky**, Steam names the entry after the `.exe` and you set Proton by hand: select the game in Steam → **Properties → Compatibility** → **Force the use of a specific Steam Play compatibility tool** → **Proton Experimental**. The dropdown sometimes snaps back to "Steam Linux Runtime" — pick Proton again and it sticks.
 - **With Steam closed**, the shortcut is written to `shortcuts.vdf` directly. This path is byte-safe: the app re-serializes your existing file, aborts if it can't reproduce it exactly, backs it up, and appends (it never regenerates the file). Deleting a game from within the app also removes its shortcut this way.
 - The first launch through Proton often fails while Steam fetches the Proton runtime ("downloading content"); the second or third attempt works. That's a one-time setup per Proton version.
 
 ### Finding your saves and configs
 
-A Windows game under Proton keeps its Documents, Saved Games and AppData inside a Wine prefix, which is hard to locate by hand. Open a downloaded game's **Saves & Folders…** (detail view or right-click) and R2SD lists the install folder plus every prefix the game can run in — Faugus's per-game prefix, Faugus's default prefix, and Steam's `compatdata` prefix — with one-click buttons for **User profile, Documents, Saved Games, AppData\Roaming, AppData\Local, AppData\LocalLow** and **Drive C:**. Only folders that exist are shown, so a game that hasn't been run yet simply says so. On Windows the same dialog opens the real user folders.
+A Windows game under Proton keeps its Documents, Saved Games and AppData inside a Wine prefix, which is hard to locate by hand. Open a downloaded game's **Saves & Folders…** (detail view or right-click) and Knarr lists the install folder plus every prefix the game can run in — Faugus's per-game prefix, Faugus's default prefix, and Steam's `compatdata` prefix — with one-click buttons for **User profile, Documents, Saved Games, AppData\Roaming, AppData\Local, AppData\LocalLow** and **Drive C:**. Only folders that exist are shown, so a game that hasn't been run yet simply says so. On Windows the same dialog opens the real user folders.
 
-**Cloud saves through RomM.** RomM keeps saves per user and per game, versioned, and R2SD can use it as the transport between your devices — Steam Deck, Linux desktop and Windows alike. Each prefix (or, on Windows, your user profile) in the Saves & Folders dialog shows its RomM status (in sync, local newer, RomM newer, or both changed) with **Upload to RomM** and **Download from RomM**. A game's own dialog shows the same thing in one line ("Changed here since the last sync", "RomM has newer saves (from Deck, …)") with the matching **Upload save** / **Download save** button. Set **Settings → Display → Cloud saves → Ask after playing** and, when a game you started from R2SD exits with changed saves, R2SD offers to upload them (**Upload to RomM** / **Not now** / **Don't ask for this game**). Or set it to **Auto** and R2SD does it around Play: restores a newer save from RomM before launching (or seeds a brand-new prefix from it), and uploads after the game exits if anything changed. RomM keeps the last 5 versions, and **History…** lists them (when, from which device, size) with **Restore** on each: the chosen version comes back here and becomes the newest on RomM, so your other devices get it too, and your current saves are zipped first (kept in R2SD's `save-backups` folder, last 5 per game) so a restore can be undone. If both sides changed since this device last synced, nothing is overwritten — not before the game starts, and not after it exits either (a game you launched anyway, or while RomM was unreachable, is not uploaded over another device's newer save). A notice takes you to the dialog to choose. On Linux, auto sync only touches a game's own prefix, never Faugus's shared `default`.
+**Cloud saves through RomM.** RomM keeps saves per user and per game, versioned, and Knarr can use it as the transport between your devices — Steam Deck, Linux desktop and Windows alike. Each prefix (or, on Windows, your user profile) in the Saves & Folders dialog shows its RomM status (in sync, local newer, RomM newer, or both changed) with **Upload to RomM** and **Download from RomM**. A game's own dialog shows the same thing in one line ("Changed here since the last sync", "RomM has newer saves (from Deck, …)") with the matching **Upload save** / **Download save** button. Set **Settings → Display → Cloud saves → Ask after playing** and, when a game you started from Knarr exits with changed saves, Knarr offers to upload them (**Upload to RomM** / **Not now** / **Don't ask for this game**). Or set it to **Auto** and Knarr does it around Play: restores a newer save from RomM before launching (or seeds a brand-new prefix from it), and uploads after the game exits if anything changed. RomM keeps the last 5 versions, and **History…** lists them (when, from which device, size) with **Restore** on each: the chosen version comes back here and becomes the newest on RomM, so your other devices get it too, and your current saves are zipped first (kept in Knarr's `save-backups` folder, last 5 per game) so a restore can be undone. If both sides changed since this device last synced, nothing is overwritten — not before the game starts, and not after it exits either (a game you launched anyway, or while RomM was unreachable, is not uploaded over another device's newer save). A notice takes you to the dialog to choose. On Linux, auto sync only touches a game's own prefix, never Faugus's shared `default`.
 
-**Windows: where does this game save?** A per-game Proton prefix holds only that game, so everything in it is the game's. The real Windows profile holds everything — every other game and your actual documents — so on Windows R2SD only ever reads a game's known **save locations** (profile-relative folders like `AppData/Local/SB/Saved/SaveGames`), and never uploads anything without them. They come from, in order: a **restore** (a save made on the Deck shows exactly where the game writes, so Deck → desktop needs nothing else); a Steam emulator's `steam_appid.txt` next to the exe (Goldberg / GSE saves); the community **[Ludusavi manifest](https://github.com/mtkennerly/ludusavi-manifest)** compiled from PCGamingWiki (~40k games; downloaded from GitHub the first time you use **Look up**, cached in the app data folder and refreshed weekly); or you, in **What syncs… → Save locations**. Windows Known Folders are honoured, so a Documents folder redirected into OneDrive works. After Play, R2SD waits until nothing is running from the game's install folder any more — so launcher stubs that hand off to the real game don't trigger an early upload — then uploads.
+**Windows: where does this game save?** A per-game Proton prefix holds only that game, so everything in it is the game's. The real Windows profile holds everything — every other game and your actual documents — so on Windows Knarr only ever reads a game's known **save locations** (profile-relative folders like `AppData/Local/SB/Saved/SaveGames`), and never uploads anything without them. They come from, in order: a **restore** (a save made on the Deck shows exactly where the game writes, so Deck → desktop needs nothing else); a Steam emulator's `steam_appid.txt` next to the exe (Goldberg / GSE saves); the community **[Ludusavi manifest](https://github.com/mtkennerly/ludusavi-manifest)** compiled from PCGamingWiki (~40k games; downloaded from GitHub the first time you use **Look up**, cached in the app data folder and refreshed weekly); or you, in **What syncs… → Save locations**. Windows Known Folders are honoured, so a Documents folder redirected into OneDrive works. After Play, Knarr waits until nothing is running from the game's install folder any more — so launcher stubs that hand off to the real game don't trigger an early upload — then uploads.
 
-**Saves vs. settings.** Games mix per-device settings (resolution, graphics quality) into the same folders as progress, and syncing those between a Deck and a desktop breaks both — Steam Cloud has the same problem. R2SD keeps settings out by default: Unreal's `Saved/Config/` folder and `.ini` / `.cfg` files are excluded from backups and cloud sync (registry-backed settings never leave the prefix anyway). **What syncs…** on each prefix lists exactly what will be included and what was excluded and why; there's a per-game switch to include config files for the rare game that keeps progress in them, and the patterns are editable.
+**Saves vs. settings.** Games mix per-device settings (resolution, graphics quality) into the same folders as progress, and syncing those between a Deck and a desktop breaks both — Steam Cloud has the same problem. Knarr keeps settings out by default: Unreal's `Saved/Config/` folder and `.ini` / `.cfg` files are excluded from backups and cloud sync (registry-backed settings never leave the prefix anyway). **What syncs…** on each prefix lists exactly what will be included and what was excluded and why; there's a per-game switch to include config files for the rare game that keeps progress in them, and the patterns are editable.
 
 **Moving saves by hand.** Each Linux prefix in that dialog also has **Back up saves…** and **Restore saves…**. Back up zips the prefix's Documents, Saved Games and AppData (minus Windows temp and shell folders) into `<game> saves <date>.zip` in a folder you pick — an SD card, a NAS share, a synced folder. Restore extracts such a zip into the prefix, overwriting same-named files and leaving everything else alone. The zip only ever contains those save folders, so restoring a backup made from Faugus's shared `default` prefix into a game's own prefix is also how you migrate saves after switching to per-game prefixes.
 
@@ -137,21 +152,21 @@ A Windows game under Proton keeps its Documents, Saved Games and AppData inside 
 
 The first Play on a downloaded game asks which `.exe` to use, and games often ship several (a launcher, a crash handler, the real thing under `bin/`). Pick the wrong one and you're not stuck: the game's details show **Play runs `<exe>`** with a **Change…** link, and the right-click menu has **Choose executable…**. The picker marks the current one with ★, and **Clear** forgets the choice so Play asks again.
 
-On Linux with per-game prefixes this also fixes up Faugus: the game is already in its library under the old executable, so R2SD repoints that entry instead of letting the next launch create a second one with its own empty prefix — same prefix, so your saves stay where they are.
+On Linux with per-game prefixes this also fixes up Faugus: the game is already in its library under the old executable, so Knarr repoints that entry instead of letting the next launch create a second one with its own empty prefix — same prefix, so your saves stay where they are.
 
 ### Any .exe on your system, without the library (Linux)
 
-R2SD's Faugus handling works on Windows games that aren't in RomM at all. Turn it on with **Settings → Display → Any .exe → Add to file manager**, then **right-click any `.exe` → Open With → Run with Faugus (R2SD)**. The first run gives that game its own Faugus prefix, launches it, and leaves a launcher in your app menu, so afterwards it's one click and R2SD isn't involved at all. Running the same `.exe` again just starts the existing entry — no duplicate prefixes.
+Knarr's Faugus handling works on Windows games that aren't in RomM at all. Turn it on with **Settings → Display → Any .exe → Add to file manager**, then **right-click any `.exe` → Open With → Run with Faugus (Knarr)**. The first run gives that game its own Faugus prefix, launches it, and leaves a launcher in your app menu, so afterwards it's one click and Knarr isn't involved at all. Running the same `.exe` again just starts the existing entry — no duplicate prefixes.
 
-The same thing from a terminal, where `R2SD` is your AppImage:
+The same thing from a terminal:
 
 ```bash
-RomM2SteamDeck.AppImage --run-exe "/games/My Game/bin/Game.exe"
+Knarr.AppImage --run-exe "/games/My Game/bin/Game.exe"
 ```
 
 `--title "Name"` overrides the name guessed from the folder, `--shared-prefix` uses Faugus's shared prefix instead of a per-game one, `--no-shortcut` skips the app-menu entry, `--pick` opens a file dialog instead, and `--help` lists everything. These modes never open a window — they work over SSH and from a TTY.
 
-*(Faugus registers itself for `application/x-ms-dos-executable`, but modern `.exe` files report `application/vnd.microsoft.portable-executable`, which is why Open With often offers nothing for them. R2SD's entry claims both.)*
+*(Faugus registers itself for `application/x-ms-dos-executable`, but modern `.exe` files report `application/vnd.microsoft.portable-executable`, which is why Open With often offers nothing for them. Knarr's entry claims both.)*
 
 ### Desktop shortcuts
 
@@ -161,12 +176,12 @@ The same dialog can create a shortcut for any executable: a `.lnk` on the Window
 
 ## Steam Deck / Game Mode
 
-RomM2SteamDeck runs in Game Mode and can add itself to your Steam library:
+Knarr runs in Game Mode and can add itself to your Steam library:
 
 1. In **Desktop Mode**, run the AppImage and configure RomM (above).
-2. Open **Settings → Add R2SD to Steam** (works whether Steam is open or closed).
+2. Open **Settings → Add Knarr to Steam** (works whether Steam is open or closed).
 3. **Apply the overlay fix** (below) unless the app reports it did so automatically.
-4. Switch to **Game Mode** — RomM2SteamDeck is in your library under *Non-Steam*.
+4. Switch to **Game Mode** — Knarr is in your library under *Non-Steam*.
 
 ### The Steam Overlay fix (required for Game Mode)
 
@@ -176,10 +191,10 @@ The Steam Overlay conflicts with Electron's startup: with it enabled, the app ei
 env LD_PRELOAD= %command%
 ```
 
-- **With Decky Loader installed**, R2SD sets this automatically when you click **Add R2SD to Steam** and confirms with *"applied the Game Mode fix automatically"*. Nothing else to do.
-- **Otherwise**, set it in Steam: select **RomM2SteamDeck** → **Properties** (the ⚙ gear) → **Launch Options**. Do it here rather than editing files — Steam owns this setting and syncs it across your devices, and it can revert direct edits to `shortcuts.vdf` (especially with the same account on more than one device). The app writes it into the file when it adds the shortcut with Steam closed, but the Properties field is the sure fix.
+- **With Decky Loader installed**, Knarr sets this automatically when you click **Add Knarr to Steam** and confirms with *"applied the Game Mode fix automatically"*. Nothing else to do.
+- **Otherwise**, set it in Steam: select **Knarr** → **Properties** (the ⚙ gear) → **Launch Options**. Do it here rather than editing files — Steam owns this setting and syncs it across your devices, and it can revert direct edits to `shortcuts.vdf` (especially with the same account on more than one device). The app writes it into the file when it adds the shortcut with Steam closed, but the Properties field is the sure fix.
 
-Once set, the app launches quickly and exits cleanly. Exit it in Game Mode with the **power button** in the top-right of the toolbar (or **Settings → Quit**). Rename it and add artwork in Steam as usual (e.g. via Decky + SteamGridDB).
+Once set, the app launches quickly and exits cleanly. Exit it in Game Mode with the **power button** in the top-right of the toolbar (or **Settings → Quit**). Knarr gives its shortcut its own library artwork; you can still change it in Steam as usual (e.g. via Decky + SteamGridDB).
 
 ### UI scale
 
@@ -206,8 +221,8 @@ The interface zooms to **140%** automatically on a Steam Deck — its 7" 1280×8
 Requires [Node.js](https://nodejs.org/) 20+ (the test suite uses `node:test` and the built-in `fetch`/`Response`).
 
 ```bash
-git clone https://github.com/jasonlifeisguid/RomM2SteamDeck.git
-cd RomM2SteamDeck
+git clone https://github.com/jasonlifeisguid/Knarr.git
+cd Knarr
 npm install
 npm start                 # run in dev
 npm test                  # unit + integration tests (VDF parser, extraction pipeline, Faugus/prefix resolution, helpers)
@@ -219,7 +234,7 @@ npm run dist:mac          # macOS: dmg (run on a Mac)
 
 Output lands in `release/`.
 
-**Releases** are built on Linux from a git tag, in throwaway Docker containers: `scripts/build-release.sh v<version>` runs the tests (log kept as `release/last-test.txt`), builds the AppImage, then builds the Windows installer and portable exe with Debian's Wine (only needed for the NSIS uninstaller step). Pass `--host user@machine` (or set `R2SD_BUILD_HOST`) to build on another machine over SSH instead of local Docker.
+**Releases** are built on Linux from a git tag, in throwaway Docker containers: `scripts/build-release.sh v<version>` runs the tests (log kept as `release/last-test.txt`), builds the AppImage, then builds the Windows installer and portable exe with Debian's Wine (only needed for the NSIS uninstaller step). Pass `--host user@machine` (or set `KNARR_BUILD_HOST`) to build on another machine over SSH instead of local Docker.
 
 `scripts/publish-release.py <version> <notes.md>` then creates the GitHub release and uploads the three artifacts (uses the `github.com` entry in your git credential store).
 
@@ -228,30 +243,30 @@ Output lands in `release/`.
 ```
 src/           Electron main process — window, IPC, RomM client, config, downloads, Steam (shortcuts.vdf + live SteamClient bridge), Faugus launcher, prefix resolution, saves + cloud sync, save-location lookup, update check, Deck detection
 renderer/      UI — plain HTML/CSS/JS, no framework
-scripts/       add-r2sd-to-steam.js (standalone "add R2SD to Steam" helper), build-release.sh, publish-release.py
+scripts/       add-knarr-to-steam.js (standalone "add Knarr to Steam" helper), build-release.sh, publish-release.py
 test/          node:test suites (run against the compiled dist/)
 build/         App icons + electron-builder afterPack hook
 ```
 
-App data lives in `%APPDATA%\romm2steamdeck-app` (Windows) or `~/.config/romm2steamdeck-app` (Linux/macOS): `config.json`, `downloads.json` (what's installed where, plus each game's cloud-sync point and save locations), the cached library, cover art, and on Windows `save-locations.json` (the reduced Ludusavi manifest). **Settings → Clear Cache** removes the cached library and covers; it never touches your games.
+App data lives in `%APPDATA%\knarr` (Windows) or `~/.config/knarr` (Linux/macOS): `config.json`, `downloads.json` (what's installed where, plus each game's cloud-sync point and save locations), the cached library, cover art, and on Windows `save-locations.json` (the reduced Ludusavi manifest). **Settings → Clear Cache** removes the cached library and covers; it never touches your games.
 
 ---
 
 ## Acknowledgments
 
 - **[RomM](https://github.com/rommapp/romm)** — the excellent ROM manager and API this app is built around.
-- **[Faugus Launcher](https://github.com/Faugus/faugus-launcher)** — the easy way to run Windows games on Linux; R2SD's Play button leans on it.
+- **[Faugus Launcher](https://github.com/Faugus/faugus-launcher)** — the easy way to run Windows games on Linux; Knarr's Play button leans on it.
 - **[Ludusavi manifest](https://github.com/mtkennerly/ludusavi-manifest)** (MIT) and **[PCGamingWiki](https://www.pcgamingwiki.com/)** — the save-location data behind Windows cloud saves.
 - **[DeckRommSync-Standalone](https://github.com/PeriBluGaming/DeckRommSync-Standalone)** by PeriBluGaming — the original inspiration for this project.
 
 ## License
 
-RomM2SteamDeck is **source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md)**. Copyright (c) 2026 jasonlifeisguid.
+Knarr is **source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md)**. Copyright (c) 2026 jasonlifeisguid.
 
 - **You may** use, copy, modify, build, and share it — including your own forks — for any **noncommercial** purpose: personal use, hobby projects, education, research, nonprofits, and the like.
 - **You may not** sell it, charge for it, bundle it into a paid product or service, or otherwise use it for commercial advantage. That applies to modified versions too.
 - Every copy or fork must keep the `Required Notice` line from [LICENSE.md](LICENSE.md).
 
-**Name policy.** The license covers the code only. The name **RomM2SteamDeck** and the **R2SD** mark are not licensed: forks and redistributions must use a different name and must not state or imply that they are endorsed by, affiliated with, or supported by the original author. If you find this software being sold, it is doing so without permission and without any involvement of the author — please report it.
+**Name policy.** The license covers the code only. The name **Knarr** and the Knarr mark (the merchant's-mark logo) are not licensed: forks and redistributions must use a different name and must not state or imply that they are endorsed by, affiliated with, or supported by the original author. If you find this software being sold, it is doing so without permission and without any involvement of the author — please report it.
 
 This is not an OSI-approved open-source license (it restricts commercial use), which is why GitHub shows "Other" in the sidebar.

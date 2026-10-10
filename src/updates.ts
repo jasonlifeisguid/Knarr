@@ -1,12 +1,15 @@
 /**
  * "Is there a newer release?" — one unauthenticated request to the GitHub
- * releases API, compared against the running version. R2SD never downloads
+ * releases API, compared against the running version. Knarr never downloads
  * or installs anything by itself; it points at the release page. Off-able in
  * Settings. No electron imports.
  */
 
-export const RELEASES_API = 'https://api.github.com/repos/jasonlifeisguid/RomM2SteamDeck/releases/latest';
-export const RELEASES_PAGE = 'https://github.com/jasonlifeisguid/RomM2SteamDeck/releases/latest';
+// The repo was RomM2SteamDeck until 3.0.0. GitHub redirects the old name (API included), which is
+// how 2.x installs find Knarr releases.
+export const REPO_PAGE = 'https://github.com/jasonlifeisguid/Knarr';
+export const RELEASES_API = 'https://api.github.com/repos/jasonlifeisguid/Knarr/releases/latest';
+export const RELEASES_PAGE = `${REPO_PAGE}/releases/latest`;
 
 export interface UpdateInfo {
   current: string;
@@ -39,7 +42,7 @@ export function compareVersions(a: string, b: string): number {
 export type FetchJson = (url: string) => Promise<{ status: number; json: unknown }>;
 
 const defaultFetch: FetchJson = async (url) => {
-  const res = await fetch(url, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'RomM2SteamDeck' } });
+  const res = await fetch(url, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Knarr' } });
   return { status: res.status, json: res.ok ? await res.json() : null };
 };
 

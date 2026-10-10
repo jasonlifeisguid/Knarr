@@ -75,7 +75,7 @@ export function realEnv(): Env {
     exists: (p) => fs.existsSync(p),
     readdir: (dir) => { try { return fs.readdirSync(dir); } catch { return []; } },
     readFile: (p) => fs.readFileSync(p, 'utf8'),
-    writeFile: (p, data) => { fs.writeFileSync(`${p}.r2sd-tmp`, data, 'utf8'); fs.renameSync(`${p}.r2sd-tmp`, p); },
+    writeFile: (p, data) => { fs.writeFileSync(`${p}.knarr-tmp`, data, 'utf8'); fs.renameSync(`${p}.knarr-tmp`, p); },
     copyFile: (from, to) => fs.copyFileSync(from, to),
     mkdirp: (dir) => fs.mkdirSync(dir, { recursive: true }),
     faugusUiRunning: () => {
@@ -136,7 +136,7 @@ export interface RegisterResult {
  * Only the fields Faugus doesn't default are written (gameid, title, path,
  * prefix, runner, optional cover); `prepare_game_kwargs` fills the rest.
  *
- * Read-modify-write is atomic and keeps a `.r2sd-bak` copy of the previous
+ * Read-modify-write is atomic and keeps a `.knarr-bak` copy of the previous
  * file. Refused while the Faugus window is open (see Env.faugusUiRunning).
  */
 export function registerGame(
@@ -144,7 +144,7 @@ export function registerGame(
   env: Env = realEnv()
 ): RegisterResult {
   if (env.faugusUiRunning()) {
-    return { ok: false, error: 'Faugus Launcher is open — close it so R2SD can add the game to its library' };
+    return { ok: false, error: 'Faugus Launcher is open — close it so Knarr can add the game to its library' };
   }
   const jsonPath = gamesJsonPath(env);
   let games: Record<string, unknown>[] = [];
@@ -191,7 +191,7 @@ export function registerGame(
 
   try {
     env.mkdirp(path.dirname(jsonPath));
-    if (env.exists(jsonPath)) env.copyFile(jsonPath, `${jsonPath}.r2sd-bak`);
+    if (env.exists(jsonPath)) env.copyFile(jsonPath, `${jsonPath}.knarr-bak`);
     env.writeFile(jsonPath, JSON.stringify([...games, entry], null, 4) + '\n');
   } catch (err) {
     return { ok: false, error: `Could not write Faugus games.json: ${err instanceof Error ? err.message : String(err)}` };
@@ -200,7 +200,7 @@ export function registerGame(
 }
 
 /** Find a Faugus install, or null. Cheap (a handful of stats), so not memoized —
- *  the user may install Faugus while R2SD is open. */
+ *  the user may install Faugus while Knarr is open. */
 export function findFaugus(env: Env = realEnv()): FaugusInstall | null {
   if (env.platform !== 'linux') return null;
 
@@ -303,11 +303,11 @@ export function repointGame(oldExePath: string, newExePath: string, env: Env = r
   }
   // Same rule as registerGame: Faugus rewrites games.json wholesale on its own saves.
   if (env.faugusUiRunning()) {
-    return { ok: false, error: 'Faugus Launcher is open — close it so R2SD can update the game in its library' };
+    return { ok: false, error: 'Faugus Launcher is open — close it so Knarr can update the game in its library' };
   }
   entry.path = next;
   try {
-    if (env.exists(jsonPath)) env.copyFile(jsonPath, `${jsonPath}.r2sd-bak`);
+    if (env.exists(jsonPath)) env.copyFile(jsonPath, `${jsonPath}.knarr-bak`);
     env.writeFile(jsonPath, JSON.stringify(games, null, 4) + '\n');
   } catch (err) {
     return { ok: false, error: `Could not write Faugus games.json: ${err instanceof Error ? err.message : String(err)}` };

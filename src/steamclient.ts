@@ -114,6 +114,16 @@ export function specifyCompatTool(appId: number, toolName: string): Promise<Stea
   return callApp('SpecifyCompatTool', appId, toolName);
 }
 
+/** Point a shortcut at another executable live (Exe is stored quoted, as Steam writes it). */
+export function setShortcutExe(appId: number, exePath: string): Promise<SteamClientResult> {
+  return callApp('SetShortcutExe', appId, `"${exePath}"`);
+}
+
+/** Set a shortcut's Start In folder live. */
+export function setShortcutStartDir(appId: number, dir: string): Promise<SteamClientResult> {
+  return callApp('SetShortcutStartDir', appId, `"${dir}"`);
+}
+
 /** Rename a shortcut live. */
 export function setShortcutName(appId: number, name: string): Promise<SteamClientResult> {
   return callApp('SetShortcutName', appId, name);
@@ -121,10 +131,14 @@ export function setShortcutName(appId: number, name: string): Promise<SteamClien
 
 /**
  * Set custom artwork for a shortcut live. `assetType` is Steam's library asset
- * slot (0 = portrait capsule / grid — the main library tile; verified on-device).
+ * slot: 0 = portrait capsule / grid, the main library tile (verified on-device);
+ * 1 = hero, 2 = logo, 3 = wide capsule (ASSET_TYPE below; as used by the Decky
+ * SteamGridDB plugin).
  * `imageType` is "png" or "jpg". Steam writes the image to
  * userdata/<id>/config/grid/ and shows it immediately.
  */
+export const ASSET_TYPE = { capsule: 0, hero: 1, logo: 2, wide: 3 } as const;
+
 export async function setArtwork(appId: number, base64: string, imageType: string, assetType: number): Promise<SteamClientResult> {
   if (process.platform !== 'linux') return { ok: false, unavailable: true };
   const result = await withConnection((c) => c.evaluate(

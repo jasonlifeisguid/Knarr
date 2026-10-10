@@ -6,20 +6,20 @@
 Expects the artifacts in release/ (from scripts/build-release.sh).
 Idempotent: re-running skips assets already uploaded. The GitHub token is
 read from git's credential store for github.com and is never printed. Asset
-names match earlier releases (installer gets dashes).
+names are the built file names (Knarr-Setup-x.y.z.exe, Knarr-x.y.z-portable.exe, Knarr.AppImage).
 """
 import json, os, subprocess, sys, urllib.request, urllib.error
 
 if len(sys.argv) < 3:
     sys.exit(__doc__)
 VERSION, NOTES = sys.argv[1], sys.argv[2]
-REPO = 'jasonlifeisguid/RomM2SteamDeck'
+REPO = 'jasonlifeisguid/Knarr'
 TAG = 'v' + VERSION
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = [  # (local file, asset name on GitHub)
-    (os.path.join(ROOT, 'release', f'RomM2SteamDeck Setup {VERSION}.exe'), f'RomM2SteamDeck-Setup-{VERSION}.exe'),
-    (os.path.join(ROOT, 'release', f'RomM2SteamDeck-{VERSION}-portable.exe'), f'RomM2SteamDeck-{VERSION}-portable.exe'),
-    (os.path.join(ROOT, 'release', 'RomM2SteamDeck.AppImage'), 'RomM2SteamDeck.AppImage'),
+    (os.path.join(ROOT, 'release', f'Knarr-Setup-{VERSION}.exe'), f'Knarr-Setup-{VERSION}.exe'),
+    (os.path.join(ROOT, 'release', f'Knarr-{VERSION}-portable.exe'), f'Knarr-{VERSION}-portable.exe'),
+    (os.path.join(ROOT, 'release', 'Knarr.AppImage'), 'Knarr.AppImage'),
 ]
 for local, _ in ASSETS:
     if not os.path.exists(local):
@@ -43,7 +43,7 @@ def api(method, url, data=None, ctype='application/json', raw=None):
 st, rel = api('GET', f'https://api.github.com/repos/{REPO}/releases/tags/{TAG}')
 if st == 404:
     st, rel = api('POST', f'https://api.github.com/repos/{REPO}/releases', {
-        'tag_name': TAG, 'name': f'RomM2SteamDeck {VERSION}', 'body': open(NOTES, encoding='utf-8').read(),
+        'tag_name': TAG, 'name': f'Knarr {VERSION}', 'body': open(NOTES, encoding='utf-8').read(),
         'draft': False, 'prerelease': False, 'make_latest': 'true',
     })
     print('create release ->', st, rel.get('html_url') or rel.get('message'))

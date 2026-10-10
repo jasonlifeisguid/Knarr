@@ -1,16 +1,16 @@
 /**
- * "Run this .exe with Faugus" — outside the R2SD library, from a file manager.
+ * "Run this .exe with Faugus" — outside the Knarr library, from a file manager.
  *
- * R2SD already knows how to give a Windows game its own Faugus prefix and
+ * Knarr already knows how to give a Windows game its own Faugus prefix and
  * launch it (faugus.ts). This exposes that to the rest of the desktop:
  *
- *   RomM2SteamDeck.AppImage --run-exe "/path/Game/bin/Game.exe"
- *   RomM2SteamDeck.AppImage --pick                 (file dialog, then the same)
- *   RomM2SteamDeck.AppImage --install-file-handler (Open With… integration)
+ *   Knarr.AppImage --run-exe "/path/Game/bin/Game.exe"
+ *   Knarr.AppImage --pick                 (file dialog, then the same)
+ *   Knarr.AppImage --install-file-handler (Open With… integration)
  *
  * The first run registers the game in Faugus's library (own prefix) and writes
  * a .desktop launcher in the same format Faugus's own "shortcut" option uses,
- * so next time it's one click from the app menu — no R2SD involved. Running the
+ * so next time it's one click from the app menu — no Knarr involved. Running the
  * same exe again just launches the existing entry.
  *
  * Linux only. No electron imports: main.ts handles argv before the GUI starts,
@@ -64,7 +64,7 @@ export function parseArgs(argv: string[]): CliArgs {
   return out;
 }
 
-export const HELP = `RomM2SteamDeck — Linux command line
+export const HELP = `Knarr — Linux command line
 
   --run-exe <file.exe>    Run a Windows .exe through Faugus Launcher, giving it
                           its own prefix and a launcher in your app menu.
@@ -72,10 +72,10 @@ export const HELP = `RomM2SteamDeck — Linux command line
       --shared-prefix     Use Faugus's shared default prefix instead
       --no-shortcut       Don't write a .desktop launcher
   --pick                  Choose an .exe in a file dialog, then run it
-  --install-file-handler  Add "Run with Faugus (R2SD)" to your file manager's
+  --install-file-handler  Add "Run with Faugus (Knarr)" to your file manager's
                           Open With menu for .exe files
   --uninstall-file-handler  Remove it again
-  (no arguments)          Start the R2SD library app
+  (no arguments)          Start the Knarr library app
 `;
 
 // ── Titles ─────────────────────────────────────────────────────────────────
@@ -121,7 +121,9 @@ export const EXE_MIME_TYPES = [
   'application/x-msi',
 ];
 
-export const HANDLER_DESKTOP_ID = 'r2sd-run-with-faugus.desktop';
+export const HANDLER_DESKTOP_ID = 'knarr-run-with-faugus.desktop';
+/** 2.x's id for the same entry; replaced (and removed) whenever the handler is (re)installed. */
+export const LEGACY_HANDLER_DESKTOP_ID = 'r2sd-run-with-faugus.desktop';
 
 /**
  * A value for one line of a .desktop file. Folder and game names come from
@@ -144,12 +146,12 @@ export function execArg(arg: string): string {
   return `"${a.replace(/[\\"`$]/g, (c) => `\\${c}`).replace(/\\/g, '\\\\')}"`;
 }
 
-/** The "Open With → Run with Faugus (R2SD)" entry. `launcher` is the AppImage path. */
+/** The "Open With → Run with Faugus (Knarr)" entry. `launcher` is the AppImage path. */
 export function handlerDesktopContents(launcher: string): string {
   return [
     '[Desktop Entry]',
     'Type=Application',
-    'Name=Run with Faugus (R2SD)',
+    'Name=Run with Faugus (Knarr)',
     'Comment=Run this Windows program through Faugus Launcher, in its own prefix',
     `Exec=${execArg(launcher)} --run-exe %f`,
     'Icon=io.github.Faugus.faugus-launcher',
@@ -218,6 +220,8 @@ export interface DesktopEnv {
   mkdirp: (dir: string) => void;
   /** Run a desktop helper (update-desktop-database, xdg-mime); failures are cosmetic. */
   run: (cmd: string, args: string[]) => void;
+  /** A helper's standard output ('' on failure). Optional: only the 2.x migration asks. */
+  output?: (cmd: string, args: string[]) => string;
 }
 
 export function realDesktopEnv(): DesktopEnv {
@@ -229,6 +233,9 @@ export function realDesktopEnv(): DesktopEnv {
     remove: (p) => { try { fs.unlinkSync(p); } catch { /* already gone */ } },
     mkdirp: (dir) => fs.mkdirSync(dir, { recursive: true }),
     run: (cmd, args) => { try { spawnSync(cmd, args, { timeout: 10_000 }); } catch { /* optional helper */ } },
+    output: (cmd, args) => {
+      try { return spawnSync(cmd, args, { timeout: 10_000, encoding: 'utf8' }).stdout || ''; } catch { return ''; }
+    },
   };
 }
 
@@ -242,6 +249,7 @@ export function installFileHandler(launcher: string, env: DesktopEnv = realDeskt
   try {
     env.mkdirp(dir);
     env.writeFile(file, handlerDesktopContents(launcher));
+    env.remove(path.join(dir, LEGACY_HANDLER_DESKTOP_ID)); // 2.x's entry, pointing at the old AppImage
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
@@ -253,8 +261,28 @@ export function uninstallFileHandler(env: DesktopEnv = realDesktopEnv()): { ok: 
   const dir = applicationsDir(env);
   const file = path.join(dir, HANDLER_DESKTOP_ID);
   env.remove(file);
+  env.remove(path.join(dir, LEGACY_HANDLER_DESKTOP_ID));
   env.run('update-desktop-database', [dir]);
   return { ok: true, file };
+}
+
+/** Is the handler installed (under its 3.0.0 or its 2.x id)? */
+export function fileHandlerInstalled(env: DesktopEnv = realDesktopEnv()): boolean {
+  const dir = applicationsDir(env);
+  return env.exists(path.join(dir, HANDLER_DESKTOP_ID)) || env.exists(path.join(dir, LEGACY_HANDLER_DESKTOP_ID));
+}
+
+/**
+ * 3.0.0 rename: a 2.x handler still runs the old RomM2SteamDeck AppImage. Reinstall it for
+ * `launcher` under the new id (which removes the old file), and if the old one was the default
+ * for double-clicking an .exe, make the new one the default too. Returns whether it migrated.
+ */
+export function migrateLegacyFileHandler(launcher: string, env: DesktopEnv = realDesktopEnv()): boolean {
+  if (!launcher || !env.exists(path.join(applicationsDir(env), LEGACY_HANDLER_DESKTOP_ID))) return false;
+  const wasDefault = (env.output?.('xdg-mime', ['query', 'default', EXE_MIME_TYPES[0]]) || '').trim() === LEGACY_HANDLER_DESKTOP_ID;
+  if (!installFileHandler(launcher, env).ok) return false;
+  if (wasDefault) setAsDefaultForExe(env);
+  return true;
 }
 
 /** Make the handler the default for .exe (double-click), not just an Open With option. */
@@ -307,6 +335,6 @@ export function runExe(exePath: string, opts: { title?: string; shared?: boolean
 /** Desktop notification for file-manager launches (no terminal to print to). */
 export function notify(title: string, body: string, urgency: 'normal' | 'critical' = 'normal'): void {
   try {
-    spawnSync('notify-send', ['-a', 'RomM2SteamDeck', '-u', urgency, '-i', 'io.github.Faugus.faugus-launcher', title, body], { timeout: 5000 });
+    spawnSync('notify-send', ['-a', 'Knarr', '-u', urgency, '-i', 'io.github.Faugus.faugus-launcher', title, body], { timeout: 5000 });
   } catch { /* no notification daemon — stdout already has it */ }
 }

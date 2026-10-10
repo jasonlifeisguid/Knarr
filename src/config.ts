@@ -45,10 +45,13 @@ interface StoredConfig {
   updateCheck: 'auto' | 'off'; // ask GitHub for a newer release on startup
   updateCheckedAt: number;     // last check (ms epoch), so startup checks are at most daily
   updateSkip: string;          // a version the user chose not to be told about again
-  playWindow: 'minimize' | 'stay'; // minimize R2SD while a game launched from Play runs
+  playWindow: 'minimize' | 'stay'; // minimize Knarr while a game launched from Play runs
   // Hyprland: put the game on its own workspace (+ fullscreen). Off by default —
   // it fights a desktop where the user has already arranged their own windowing.
   playWorkspace: 'fullscreen' | 'workspace' | 'off';
+  // 3.0.0 rename: Steam shortcuts still pointing at a 2.x RomM2SteamDeck launcher. 'done' once
+  // repointed (or none found); 'hinted' once the user was told it couldn't be done yet.
+  steamRepoint: '' | 'hinted' | 'done';
 }
 
 export interface PublicConfig {
@@ -76,14 +79,15 @@ export interface PublicConfig {
   updateSkip: string;
   playWindow: 'minimize' | 'stay';
   playWorkspace: 'fullscreen' | 'workspace' | 'off';
+  steamRepoint: '' | 'hinted' | 'done';
 }
 
 const DEFAULTS: StoredConfig = {
-  baseUrl: '', username: '', passwordEncrypted: '', theme: 'oled-limited', view: 'grid',
+  baseUrl: '', username: '', passwordEncrypted: '', theme: 'knarr', view: 'grid',
   pinnedPlatforms: [], platforms: {}, basePath: '', stagingPath: '', uiScale: 'auto', faugus: 'auto',
   installedOnly: false, faugusPrefix: 'per-game',
   cloudSaves: 'off', saveExcludes: DEFAULT_CONFIG_EXCLUDES, rommDeviceId: '',
-  updateCheck: 'auto', updateCheckedAt: 0, updateSkip: '', playWindow: 'minimize', playWorkspace: 'off',
+  updateCheck: 'auto', updateCheckedAt: 0, updateSkip: '', playWindow: 'minimize', playWorkspace: 'off', steamRepoint: '',
 };
 
 // Overridable so modules that read config can run under plain Node in tests.
@@ -139,6 +143,7 @@ function writeStored(config: StoredConfig): void {
 // Stored format is scheme-prefixed: "ss:" = safeStorage, "ob:" = obfuscated.
 // A legacy value with no prefix is an old raw-safeStorage blob (tried best-effort).
 
+// Keeps its 2.x spelling: changing it would make every saved Linux password unreadable.
 const OBFUSCATION_KEY = 'R2SD/local-obfuscation-not-real-encryption/v1';
 
 function xorCode(buf: Buffer): Buffer {
@@ -204,6 +209,7 @@ export function getPublicConfig(): PublicConfig {
     updateSkip: typeof stored.updateSkip === 'string' ? stored.updateSkip : '',
     playWindow: stored.playWindow === 'stay' ? 'stay' : 'minimize',
     playWorkspace: stored.playWorkspace === 'fullscreen' ? 'fullscreen' : stored.playWorkspace === 'workspace' ? 'workspace' : 'off',
+    steamRepoint: stored.steamRepoint === 'done' ? 'done' : stored.steamRepoint === 'hinted' ? 'hinted' : '',
   };
 }
 
@@ -223,6 +229,7 @@ export function setConfig(update: {
   basePath?: string; stagingPath?: string; uiScale?: string; faugus?: string; faugusPrefix?: string; installedOnly?: boolean;
   cloudSaves?: string; saveExcludes?: string[]; rommDeviceId?: string;
   updateCheck?: string; updateCheckedAt?: number; updateSkip?: string; playWindow?: string; playWorkspace?: string;
+  steamRepoint?: string;
 }): PublicConfig {
   // Copy before mutating so a failed write can't leave the memo half-updated.
   const stored: StoredConfig = { ...load().stored };
@@ -243,6 +250,7 @@ export function setConfig(update: {
   if (update.updateCheckedAt !== undefined) stored.updateCheckedAt = Number(update.updateCheckedAt) || 0;
   if (update.updateSkip !== undefined) stored.updateSkip = String(update.updateSkip);
   if (update.playWindow !== undefined) stored.playWindow = update.playWindow === 'stay' ? 'stay' : 'minimize';
+  if (update.steamRepoint !== undefined) stored.steamRepoint = update.steamRepoint === 'done' ? 'done' : update.steamRepoint === 'hinted' ? 'hinted' : '';
   if (update.playWorkspace !== undefined) stored.playWorkspace = update.playWorkspace === 'fullscreen' ? 'fullscreen' : update.playWorkspace === 'workspace' ? 'workspace' : 'off';
   if (update.pinnedPlatforms !== undefined) {
     stored.pinnedPlatforms = (Array.isArray(update.pinnedPlatforms) ? update.pinnedPlatforms : [])

@@ -1,4 +1,4 @@
-/* Renderer logic — talks to the main process only through window.r2sd (preload bridge). */
+/* Renderer logic — talks to the main process only through window.knarr (preload bridge). */
 
 const $ = (id) => document.getElementById(id);
 
@@ -49,6 +49,7 @@ function addRoms(roms) {
 // Color themes — applied by setting CSS variables on :root (ported from the
 // Python app's palette). Programmatic style is allowed under our CSP.
 const THEMES = [
+  { id: 'knarr', name: 'Knarr', desc: 'Night sea and gold', dot: '#e2b64e', vars: { '--bg': '#0e1a2b', '--bg-panel': '#132238', '--bg-card': '#1a2c46', '--bg-hover': '#22385a', '--accent': '#e2b64e', '--accent-dim': 'rgba(226,182,78,0.16)', '--text': '#efe6d2', '--text-muted': '#8fa3b8', '--border': '#263d5e' } },
   { id: 'oled-limited', name: 'OLED Limited', desc: 'Steam Deck orange', dot: '#ff6b00', vars: { '--bg': '#0d0d0d', '--bg-panel': '#161616', '--bg-card': '#1e1e1e', '--bg-hover': '#262626', '--accent': '#ff6b00', '--accent-dim': 'rgba(255,107,0,0.15)', '--text': '#f0f0f0', '--text-muted': '#8a8a8a', '--border': '#2a2a2a' } },
   { id: 'oled-black', name: 'OLED Black', desc: 'Pure black', dot: '#000000', vars: { '--bg': '#000000', '--bg-panel': '#0a0a0a', '--bg-card': '#121212', '--bg-hover': '#1c1c1c', '--accent': '#ff6b00', '--accent-dim': 'rgba(255,107,0,0.15)', '--text': '#f0f0f0', '--text-muted': '#7a7a7a', '--border': '#1e1e1e' } },
   { id: 'classic-white', name: 'Classic White', desc: 'Clean light', dot: '#ffffff', vars: { '--bg': '#f4f4f5', '--bg-panel': '#ffffff', '--bg-card': '#ffffff', '--bg-hover': '#eaeaea', '--accent': '#2563eb', '--accent-dim': 'rgba(37,99,235,0.12)', '--text': '#1a1a1a', '--text-muted': '#6b7280', '--border': '#d4d4d8' } },
@@ -88,7 +89,7 @@ function renderThemeGrid() {
     el.addEventListener('click', async () => {
       applyTheme(t.id);
       renderThemeGrid();
-      await window.r2sd.setConfig({ theme: t.id });
+      await window.knarr.setConfig({ theme: t.id });
     });
     grid.appendChild(el);
   }
@@ -185,12 +186,12 @@ function platformSetup(platformId) {
 
 async function setAssetSrc(img, romId, serverPath) {
   if (!serverPath) return;
-  const url = await window.r2sd.getAsset(romId, serverPath); // r2sd-asset://covers/<file>
+  const url = await window.knarr.getAsset(romId, serverPath); // knarr-asset://covers/<file>
   if (url) img.src = url;
 }
 
 async function reloadConfig() {
-  state.config = await window.r2sd.getConfig();
+  state.config = await window.knarr.getConfig();
   state.pinned = state.config.pinnedPlatforms || [];
   state.theme = state.config.theme || 'oled-limited';
   state.view = state.config.view === 'list' ? 'list' : 'grid';
@@ -220,7 +221,7 @@ function installedStateAffectsLayout() {
 }
 
 async function reloadDownloads() {
-  const records = await window.r2sd.listDownloads();
+  const records = await window.knarr.listDownloads();
   state.downloads = new Map(records.map((r) => [r.romId, r]));
 }
 
@@ -283,12 +284,12 @@ async function togglePin(platformId) {
     ? state.pinned.filter((id) => id !== platformId)
     : [...state.pinned, platformId];
   renderPlatforms();
-  await window.r2sd.setConfig({ pinnedPlatforms: state.pinned });
+  await window.knarr.setConfig({ pinnedPlatforms: state.pinned });
 }
 
 async function loadPlatforms(refresh = false) {
   try {
-    const result = await window.r2sd.getPlatforms({ refresh });
+    const result = await window.knarr.getPlatforms({ refresh });
     state.platforms = result.platforms;
     setCacheStatus(result.fromCache, result.fetchedAt);
     renderPlatforms();
@@ -500,7 +501,7 @@ function buildCardActions(rom) {
     actions.appendChild(b);
   };
   if (qs) {
-    mkBtn(ICON.cancel, qs === 'queued' ? 'Remove from queue' : 'Cancel download', 'danger', () => window.r2sd.cancelDownload(rom.id));
+    mkBtn(ICON.cancel, qs === 'queued' ? 'Remove from queue' : 'Cancel download', 'danger', () => window.knarr.cancelDownload(rom.id));
   } else if (downloaded) {
     mkBtn(ICON.trash, 'Delete from disk', 'danger', () => deleteDownloadFor(rom));
   } else {
@@ -520,7 +521,7 @@ function updateCardActions(romId) {
 
 /** Queue a download from a tile/menu using the platform's default install path. */
 function startDownloadWith(rom, installPath) {
-  window.r2sd.startDownload(
+  window.knarr.startDownload(
     { id: rom.id, name: rom.name || rom.fs_name, fsName: rom.fs_name, platformId: rom.platform_id, size: rom.fs_size_bytes || 0 },
     installPath || ''
   );
@@ -581,7 +582,7 @@ function showContextMenu(e, rom) {
   const downloaded = state.downloads.has(rom.id);
   const setup = platformSetup(rom.platform_id);
   if (progress) {
-    item('Cancel download', () => window.r2sd.cancelDownload(rom.id), true);
+    item('Cancel download', () => window.knarr.cancelDownload(rom.id), true);
   } else if (downloaded) {
     if (setup.autoExtract) {
       item('▶ Play', () => playGame(rom));
@@ -824,14 +825,14 @@ async function selectPlatform(platformId, refresh = false) {
   $('grid-status').textContent = 'Loading…';
 
   try {
-    const result = await window.r2sd.getRoms(platformId, { refresh });
+    const result = await window.knarr.getRoms(platformId, { refresh });
     if (state.currentPlatformId !== platformId) return;
     setRoms(result.roms);
     // Reconcile download records with what's on disk BEFORE rendering, so the
     // cards are built with the right badges in one pass. (Rendering first and
     // then patching every card was O(n²) on a 5,000-game platform: a DOM query
     // plus an array scan per rom.)
-    const changes = await window.r2sd.syncDownloads(platformId);
+    const changes = await window.knarr.syncDownloads(platformId);
     await reloadDownloads();
     if (state.currentPlatformId !== platformId) return;
     setCacheStatus(result.fromCache, result.fetchedAt);
@@ -851,7 +852,7 @@ async function selectPlatform(platformId, refresh = false) {
 }
 
 // Progressive pages during a cold (uncached) load → render as they arrive
-window.r2sd.onRomsProgress(({ platformId, page, loaded, total }) => {
+window.knarr.onRomsProgress(({ platformId, page, loaded, total }) => {
   if (platformId !== state.currentPlatformId) return;
   addRoms(page);
   updateGenreFilter();
@@ -863,12 +864,23 @@ window.r2sd.onRomsProgress(({ platformId, page, loaded, total }) => {
   if (loaded >= total) $('grid-status').hidden = true;
 });
 
-window.r2sd.onRefreshFailed(({ platformId, error }) => {
+window.knarr.onRefreshFailed(({ platformId, error }) => {
   if (platformId !== undefined && platformId !== state.currentPlatformId) return;
   setCacheRefreshFailed(error || 'refresh failed');
 });
 
-window.r2sd.onCloudEvent((e) => {
+// 3.0.0 rename: the Steam shortcut made by 2.x (RomM2SteamDeck) is repointed at Knarr on startup
+window.knarr.onSteamRepointed(({ count }) => {
+  toast(count > 1 ? 'Your Steam shortcuts now open Knarr' : 'Your Steam shortcut now opens Knarr');
+});
+window.knarr.onSteamRepointPending(({ steamRunning }) => {
+  stickyToast(steamRunning
+    ? 'Your Steam shortcut still opens the old RomM2SteamDeck. Exit Steam and start Knarr again to update it, or use Settings → Add Knarr to Steam.'
+    : 'Your Steam shortcut still opens the old RomM2SteamDeck. Use Settings → Add Knarr to Steam to add Knarr.',
+  [{ label: 'OK' }]);
+});
+
+window.knarr.onCloudEvent((e) => {
   if (e.action === 'uploaded') toast(`${e.gameName}: saves uploaded to RomM`, 'success');
   else if (e.action === 'unscoped') toast(`${e.gameName}: not synced — no save locations known. Saves & Folders… → What syncs… to set them.`, 'error');
   else if (e.action === 'error') toast(`${e.gameName}: cloud save upload failed — ${e.error}`, 'error');
@@ -883,7 +895,7 @@ window.r2sd.onCloudEvent((e) => {
 });
 
 // "Ask after playing": the game exited and its saves changed since the last RomM sync
-window.r2sd.onCloudSuggest((e) => {
+window.knarr.onCloudSuggest((e) => {
   const game = { id: e.romId, name: e.gameName };
   if (e.suggest === 'conflict') {
     stickyToast(`${e.gameName}: saves changed here and on RomM (from ${e.remoteFrom || 'another device'}) — choose which to keep.`, [
@@ -895,34 +907,34 @@ window.r2sd.onCloudSuggest((e) => {
   const what = e.state === 'local-only' ? "aren't on RomM yet" : 'changed since the last RomM sync';
   stickyToast(`${e.gameName}: your saves ${what} (${e.files} file${e.files === 1 ? '' : 's'}, ${formatSize(e.bytes)}). Upload them?`, [
     { label: 'Upload to RomM', fn: async () => {
-      const res = await window.r2sd.cloudUpload(e.romId, e.root);
+      const res = await window.knarr.cloudUpload(e.romId, e.root);
       if (res.error) toast(`${e.gameName}: upload failed — ${res.error}`, 'error');
       else toast(`${e.gameName}: saves uploaded to RomM`, 'success');
       if (state.detailRom?.id === e.romId) refreshDetailCloud();
     } },
     { label: 'Not now' },
     { label: "Don't ask for this game", fn: async () => {
-      await window.r2sd.setCloudAsk(e.romId, false);
+      await window.knarr.setCloudAsk(e.romId, false);
       toast(`${e.gameName}: won't ask again — upload any time from its dialog`, 'success');
     } },
   ], 'success');
 });
 
-window.r2sd.onUpdateAvailable((info) => {
-  stickyToast(`RomM2SteamDeck ${info.latest} is available (you have ${info.current})`, [
-    { label: 'Open release', fn: () => window.r2sd.openReleasePage(info.url) },
-    { label: 'Skip this version', fn: () => window.r2sd.skipUpdate(info.latest) },
+window.knarr.onUpdateAvailable((info) => {
+  stickyToast(`Knarr ${info.latest} is available (you have ${info.current})`, [
+    { label: 'Open release', fn: () => window.knarr.openReleasePage(info.url) },
+    { label: 'Skip this version', fn: () => window.knarr.skipUpdate(info.latest) },
     { label: 'Later' },
   ], 'success');
 });
 
-window.r2sd.onPlatformsUpdated(({ data, fetchedAt }) => {
+window.knarr.onPlatformsUpdated(({ data, fetchedAt }) => {
   state.platforms = data;
   setCacheStatus(false, fetchedAt);
   renderPlatforms();
 });
 
-window.r2sd.onRomsUpdated(({ platformId, data, fetchedAt }) => {
+window.knarr.onRomsUpdated(({ platformId, data, fetchedAt }) => {
   if (platformId !== state.currentPlatformId) return;
   setRoms(data);
   setCacheStatus(false, fetchedAt);
@@ -932,7 +944,7 @@ window.r2sd.onRomsUpdated(({ platformId, data, fetchedAt }) => {
 
 // ── Downloads ───────────────────────────────────────────
 
-window.r2sd.onDownloadEvent(async (event) => {
+window.knarr.onDownloadEvent(async (event) => {
   const { romId, status } = event;
   const terminal = ['complete', 'extracted', 'error', 'cancelled'].includes(status);
 
@@ -957,7 +969,7 @@ window.r2sd.onDownloadEvent(async (event) => {
 });
 
 // Queue composition changes (serial queue in the main process)
-window.r2sd.onQueueUpdate((payload) => {
+window.knarr.onQueueUpdate((payload) => {
   const prevIds = new Set(state.queue.map((q) => q.romId));
   state.queue = payload.items || [];
   const nowIds = new Set(state.queue.map((q) => q.romId));
@@ -1015,7 +1027,7 @@ function renderQueueBar() {
     cancel.className = 'card-action-btn danger';
     cancel.textContent = '✕';
     cancel.title = q.status === 'queued' ? 'Remove from queue' : 'Cancel';
-    cancel.addEventListener('click', () => window.r2sd.cancelDownload(q.romId));
+    cancel.addEventListener('click', () => window.knarr.cancelDownload(q.romId));
     row.appendChild(cancel);
     list.appendChild(row);
   }
@@ -1024,7 +1036,7 @@ function renderQueueBar() {
 function startDownloadFor(rom) {
   const installSelect = $('detail-install-path');
   const installPath = installSelect.hidden ? '' : installSelect.value;
-  window.r2sd.startDownload(
+  window.knarr.startDownload(
     { id: rom.id, name: rom.name || rom.fs_name, fsName: rom.fs_name, platformId: rom.platform_id, size: rom.fs_size_bytes || 0 },
     installPath
   );
@@ -1037,7 +1049,7 @@ async function deleteDownloadFor(rom) {
   const record = state.downloads.get(rom.id);
   const target = record?.filePath || '(tracking record only)';
   if (!confirm(`Delete ${rom.name || rom.fs_name} from disk?\n\n${target}`)) return;
-  const result = await window.r2sd.deleteDownload(rom.id);
+  const result = await window.knarr.deleteDownload(rom.id);
   if (result.error) {
     toast(result.error, 'error');
   } else if (result.steamRemoved && result.steamRemoved.length) {
@@ -1160,7 +1172,7 @@ async function refreshDetailCloud() {
   const row = $('detail-cloud-row');
   const rec = rom && state.downloads.get(rom.id);
   if (!rom || !rec || !platformSetup(rom.platform_id).autoExtract || queueStatusFor(rom.id)) { row.hidden = true; return; }
-  const st = await window.r2sd.cloudOwnStatus(rom.id);
+  const st = await window.knarr.cloudOwnStatus(rom.id);
   if (state.detailRom?.id !== rom.id) return; // another game's dialog by now
   const line = st.ok && !st.unscoped ? CLOUD_LINE[st.state] : null;
   row.hidden = !line;
@@ -1183,7 +1195,7 @@ async function refreshDetailCloud() {
     if (line.action === 'choose') { openFoldersModal(rom); return; }
     btn.disabled = true;
     try {
-      const res = line.action === 'upload' ? await window.r2sd.cloudUpload(rom.id, st.root) : await window.r2sd.cloudDownload(rom.id, st.root);
+      const res = line.action === 'upload' ? await window.knarr.cloudUpload(rom.id, st.root) : await window.knarr.cloudDownload(rom.id, st.root);
       if (res.cancelled) return;
       if (res.error) toast(res.error, 'error');
       else toast(line.action === 'upload' ? `${rom.name || rom.fs_name}: saves uploaded to RomM` : `${rom.name || rom.fs_name}: saves restored from RomM`, 'success');
@@ -1267,7 +1279,7 @@ async function openExePicker(rom) {
 
   // Native "Add to Steam" only shown when a Steam install is found; the
   // "right-click → Add to Steam" tip is the Linux/Deck manual fallback.
-  const [platform, steam, fg] = await Promise.all([window.r2sd.getPlatform(), window.r2sd.steamStatus(), window.r2sd.faugusStatus()]);
+  const [platform, steam, fg] = await Promise.all([window.knarr.getPlatform(), window.knarr.steamStatus(), window.knarr.faugusStatus()]);
   if (ticket !== exePickerTicket) return;
   $('exe-steam').hidden = !steam.found;
   const faugusActive = platform === 'linux' && fg.found && fg.enabled;
@@ -1280,7 +1292,7 @@ async function openExePicker(rom) {
   $('exe-proton-tip').hidden = !(platform === 'linux' && steam.found && !steam.canEditLive);
   $('exe-modal').hidden = false;
 
-  const exes = await window.r2sd.listExes(rom.id);
+  const exes = await window.knarr.listExes(rom.id);
   if (ticket !== exePickerTicket) return;
   if (!exes.length) {
     $('exe-list').innerHTML = '<p class="error small">No .exe files found in the installed folder.</p>';
@@ -1339,7 +1351,7 @@ function closeExePicker() {
 
 async function createShortcut() {
   if (!exeSelected || !exePickerRom) return;
-  const res = await window.r2sd.createShortcut(exePickerRom.id, exeSelected.path, exePickerRom.name || exePickerRom.fs_name);
+  const res = await window.knarr.createShortcut(exePickerRom.id, exeSelected.path, exePickerRom.name || exePickerRom.fs_name);
   closeExePicker();
   if (res.error) toast(res.error, 'error');
   else toast(res.appMenu ? 'Added to your app menu (runs through Faugus)' : 'Desktop shortcut created', 'success');
@@ -1348,7 +1360,7 @@ async function createShortcut() {
 async function setDefaultFromPicker() {
   if (!exeSelected || !exePickerRom) return;
   const rom = exePickerRom;
-  const res = await window.r2sd.setDefaultExe(rom.id, exeSelected.path);
+  const res = await window.knarr.setDefaultExe(rom.id, exeSelected.path);
   await reloadDownloads();
   if (res && res.error) toast(res.error, 'error');
   else toast(`Play now runs ${exeSelected.relativePath}`, 'success');
@@ -1366,7 +1378,7 @@ async function setDefaultFromPicker() {
 async function clearDefaultFromPicker() {
   if (!exePickerRom) return;
   const rom = exePickerRom;
-  await window.r2sd.setDefaultExe(rom.id, '');
+  await window.knarr.setDefaultExe(rom.id, '');
   await reloadDownloads();
   closeExePicker();
   toast('Cleared — Play will ask which executable to use', 'success');
@@ -1397,7 +1409,7 @@ async function playFromPicker() {
   const rom = exePickerRom;
   const exe = exeSelected;
   closeExePicker();
-  const res = await window.r2sd.launchGame(rom.id, exe.path, rom.path_cover_large || rom.path_cover_small || ''); // also sets as default
+  const res = await window.knarr.launchGame(rom.id, exe.path, rom.path_cover_large || rom.path_cover_small || ''); // also sets as default
   launchToast(rom, res);
   await reloadDownloads();
   if (state.detailRom?.id === rom.id) refreshDetailActions();
@@ -1407,7 +1419,7 @@ async function playFromPicker() {
 async function playGame(rom) {
   const rec = state.downloads.get(rom.id);
   if (rec && rec.defaultExe) {
-    launchToast(rom, await window.r2sd.launchGame(rom.id, undefined, rom.path_cover_large || rom.path_cover_small || ''));
+    launchToast(rom, await window.knarr.launchGame(rom.id, undefined, rom.path_cover_large || rom.path_cover_small || ''));
   } else {
     openExePicker(rom); // no default yet — choose an exe, then Play from the picker
   }
@@ -1417,7 +1429,7 @@ async function addToSteam() {
   if (!exeSelected || !exePickerRom) return;
   const proton = !$('exe-proton-check').hidden && $('exe-proton').checked;
   const coverPath = exePickerRom.path_cover_large || exePickerRom.path_cover_small || '';
-  const res = await window.r2sd.addToSteam(exePickerRom.id, exeSelected.path, exePickerRom.name || exePickerRom.fs_name, proton, coverPath);
+  const res = await window.knarr.addToSteam(exePickerRom.id, exeSelected.path, exePickerRom.name || exePickerRom.fs_name, proton, coverPath);
   if (res.error) {
     // Keep the picker open (e.g. Steam is running → user needs to quit it first)
     toast(res.error, 'error');
@@ -1449,7 +1461,7 @@ async function openFoldersModal(rom) {
   list.innerHTML = '<p class="folders-empty">Looking up folders…</p>';
   $('folders-modal').hidden = false;
 
-  const info = await window.r2sd.gameFolders(rom.id);
+  const info = await window.knarr.gameFolders(rom.id);
   if (foldersRom?.id !== rom.id) return;
   list.innerHTML = '';
   const addGroup = (label, root, items, saveActions = false) => {
@@ -1464,7 +1476,7 @@ async function openFoldersModal(rom) {
       b.textContent = it.label;
       b.title = it.path;
       b.addEventListener('click', async () => {
-        const res = await window.r2sd.openGameFolder(rom.id, it.path);
+        const res = await window.knarr.openGameFolder(rom.id, it.path);
         if (res.error) toast(res.error, 'error');
       });
       row.appendChild(b);
@@ -1483,13 +1495,13 @@ async function openFoldersModal(rom) {
         actions.appendChild(b);
       };
       mk('Back up saves…', 'Zip this prefix\'s Documents / Saved Games / AppData to a folder you choose', async () => {
-        const res = await window.r2sd.backupSaves(rom.id, root);
+        const res = await window.knarr.backupSaves(rom.id, root);
         if (res.cancelled) return;
         if (res.error) toast(res.error, 'error');
         else toast(`Saves backed up: ${res.file}`, 'success');
       });
       mk('Restore saves…', 'Extract a saves backup (.zip) into this prefix, overwriting same-named files', async () => {
-        const res = await window.r2sd.restoreSaves(rom.id, root);
+        const res = await window.knarr.restoreSaves(rom.id, root);
         if (res.cancelled) return;
         if (res.error) toast(res.error, 'error');
         else toast(`Saves restored (${res.folders.join(', ')})${res.skipped ? ` — ${res.skipped} files outside this game's save locations left out` : ''}`, 'success');
@@ -1512,7 +1524,7 @@ async function openFoldersModal(rom) {
         return b;
       };
       const refreshCloud = async () => {
-        const st = await window.r2sd.cloudStatus(rom.id, root);
+        const st = await window.knarr.cloudStatus(rom.id, root);
         if (foldersRom?.id !== rom.id) return;
         cloudRow.innerHTML = '';
         if (!st.ok) { cloudRow.textContent = `RomM: ${st.error}`; return; }
@@ -1533,12 +1545,12 @@ async function openFoldersModal(rom) {
         else if (!st.own) cloudRow.append(' · shared prefix: manual only');
       };
       cmk('Upload to RomM', 'Zip this prefix\'s saves and store them in your RomM account (keeps the last 5 versions)', async () => {
-        const res = await window.r2sd.cloudUpload(rom.id, root);
+        const res = await window.knarr.cloudUpload(rom.id, root);
         if (res.error) toast(res.error, 'error'); else toast(`Uploaded ${res.files} files (${formatSize(res.bytes)}) to RomM`, 'success');
         await refreshCloud();
       });
       cmk('Download from RomM', 'Restore the latest RomM save into this prefix', async () => {
-        const res = await window.r2sd.cloudDownload(rom.id, root);
+        const res = await window.knarr.cloudDownload(rom.id, root);
         if (res.cancelled) return;
         if (res.error) toast(res.error, 'error'); else toast('Saves restored from RomM', 'success');
         await refreshCloud();
@@ -1577,7 +1589,7 @@ async function openHistoryModal(rom, root, onChanged) {
 async function renderHistory() {
   if (!historyCtx) return;
   const { rom, root } = historyCtx;
-  const res = await window.r2sd.cloudHistory(rom.id, root);
+  const res = await window.knarr.cloudHistory(rom.id, root);
   if (!historyCtx || historyCtx.rom.id !== rom.id) return;
   const list = $('history-list');
   list.innerHTML = '';
@@ -1609,13 +1621,13 @@ async function renderHistory() {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       try {
-        const r = await window.r2sd.cloudRestoreVersion(rom.id, root, v.saveId, label);
+        const r = await window.knarr.cloudRestoreVersion(rom.id, root, v.saveId, label);
         if (r.cancelled) return;
         if (r.error) {
           toast(r.error, 'error');
         } else {
           const actions = [{ label: 'OK' }];
-          if (r.backup) actions.unshift({ label: 'Show backup', fn: () => window.r2sd.showSaveBackup(r.backup) });
+          if (r.backup) actions.unshift({ label: 'Show backup', fn: () => window.knarr.showSaveBackup(r.backup) });
           stickyToast(`Restored the save from ${label}${r.reuploaded ? ' — it is now the newest on RomM' : ''}.${r.backup ? ' Your previous saves were backed up first.' : ''}`, actions, 'success');
         }
         await renderHistory();
@@ -1641,7 +1653,7 @@ async function openSyncsModal(rom, root) {
 async function renderSyncs() {
   if (!syncsCtx) return;
   const { rom, root } = syncsCtx;
-  const p = await window.r2sd.savesPreview(rom.id, root);
+  const p = await window.knarr.savesPreview(rom.id, root);
   if (!syncsCtx || syncsCtx.rom.id !== rom.id) return;
   const list = $('syncs-list');
   list.innerHTML = '';
@@ -1723,7 +1735,7 @@ function buildPlatformRows() {
     folderBrowse.innerHTML = '&#128193;';
     folderBrowse.title = 'Browse';
     folderBrowse.addEventListener('click', async () => {
-      const picked = await window.r2sd.pickFolder(`Folder for ${p.name}`);
+      const picked = await window.knarr.pickFolder(`Folder for ${p.name}`);
       if (picked) { folderInput.value = picked; markDirty(); }
     });
     folderRow.append(folderInput, folderBrowse);
@@ -1747,7 +1759,7 @@ function buildPlatformRows() {
       browse.innerHTML = '&#128193;';
       browse.title = 'Browse';
       browse.addEventListener('click', async () => {
-        const picked = await window.r2sd.pickFolder(`Install path for ${p.name}`);
+        const picked = await window.knarr.pickFolder(`Install path for ${p.name}`);
         if (picked) { inp.value = picked; markDirty(); }
       });
       const remove = document.createElement('button');
@@ -1813,7 +1825,7 @@ async function savePlatformsModal() {
       installPaths: [...new Set([...row.querySelectorAll('.pf-install')].map((i) => i.value.trim()).filter(Boolean))],
     };
   }
-  await window.r2sd.setConfig({
+  await window.knarr.setConfig({
     platforms,
     basePath: $('pf-base').value.trim(),
     stagingPath: $('pf-staging').value.trim(),
@@ -1879,7 +1891,7 @@ const UPDATE_OPTIONS = [
 ];
 
 const PLAY_WINDOW_OPTIONS = [
-  { value: 'minimize', label: 'Minimize R2SD' },
+  { value: 'minimize', label: 'Minimize Knarr' },
   { value: 'stay', label: 'Stay open' },
 ];
 
@@ -1892,14 +1904,14 @@ const PLAY_WORKSPACE_OPTIONS = [
 async function renderPlayWindowSetting(cfg) {
   setDropdownValue('cfg-playwindow', cfg.playWindow || 'minimize');
   $('cfg-playwindow-hint').textContent = cfg.playWindow === 'stay'
-    ? 'R2SD stays where it is; the controller is ignored until the game exits'
-    : 'Gets R2SD out of the way while the game runs, then brings it back';
-  const desk = await window.r2sd.getDesktop();
+    ? 'Knarr stays where it is; the controller is ignored until the game exits'
+    : 'Gets Knarr out of the way while the game runs, then brings it back';
+  const desk = await window.knarr.getDesktop();
   $('cfg-playworkspace-row').hidden = !desk.hyprland;
   if (desk.hyprland) {
     setDropdownValue('cfg-playworkspace', cfg.playWorkspace || 'off');
     $('cfg-playworkspace-hint').textContent = {
-      fullscreen: 'The game opens on a fresh workspace and goes fullscreen; R2SD gets focus back when it exits',
+      fullscreen: 'The game opens on a fresh workspace and goes fullscreen; Knarr gets focus back when it exits',
       workspace: 'The game opens on a fresh workspace; window size is left alone',
       off: 'Your compositor places the game window (use this if you have tiling off)',
     }[cfg.playWorkspace || 'off'];
@@ -1918,7 +1930,7 @@ function renderUpdateSetting(cfg) {
 
 /** Faugus / prefix rows are Linux only; cloud saves shows on Linux and Windows. */
 async function renderFaugusSetting(cfg) {
-  const [platform, fg] = await Promise.all([window.r2sd.getPlatform(), window.r2sd.faugusStatus()]);
+  const [platform, fg] = await Promise.all([window.knarr.getPlatform(), window.knarr.faugusStatus()]);
   $('cfg-faugus-row').hidden = platform !== 'linux';
   $('cfg-faugusprefix-row').hidden = platform !== 'linux';
   $('cfg-cloud-row').hidden = platform !== 'linux' && platform !== 'win32';
@@ -1948,8 +1960,8 @@ async function renderFaugusSetting(cfg) {
   if (!fhRow.hidden) {
     $('btn-filehandler').textContent = fg.fileHandler ? 'Remove from file manager' : 'Add to file manager';
     $('cfg-filehandler-hint').textContent = fg.fileHandler
-      ? 'Right-click any .exe → Open With → "Run with Faugus (R2SD)"'
-      : 'Adds "Run with Faugus (R2SD)" to the Open With menu for .exe files';
+      ? 'Right-click any .exe → Open With → "Run with Faugus (Knarr)"'
+      : 'Adds "Run with Faugus (Knarr)" to the Open With menu for .exe files';
   }
   const how = { binary: 'system package', appimage: 'AppImage', flatpak: 'Flatpak' }[fg.method] || '';
   $('cfg-faugus-hint').textContent = !fg.found
@@ -1958,12 +1970,12 @@ async function renderFaugusSetting(cfg) {
 }
 
 async function openSettings() {
-  const cfg = await window.r2sd.getConfig();
-  window.r2sd.getUiScaleInfo().then(renderUiScale);
+  const cfg = await window.knarr.getConfig();
+  window.knarr.getUiScaleInfo().then(renderUiScale);
   renderFaugusSetting(cfg);
   renderUpdateSetting(cfg);
   renderPlayWindowSetting(cfg);
-  window.r2sd.getVersion().then((v) => { $('cfg-version').textContent = v ? `v${v}` : ''; });
+  window.knarr.getVersion().then((v) => { $('cfg-version').textContent = v ? `v${v}` : ''; });
   $('cfg-url').value = cfg.baseUrl;
   $('cfg-username').value = cfg.username;
   $('cfg-password').value = '';
@@ -1976,8 +1988,8 @@ async function openSettings() {
     $('cfg-test-result').className = 'small';
     $('cfg-test-result').textContent = '';
   }
-  // "Add R2SD to Steam" only makes sense when a Steam install is found.
-  window.r2sd.steamStatus().then((s) => { $('btn-add-self-steam').hidden = !s.found; });
+  // "Add Knarr to Steam" only makes sense when a Steam install is found.
+  window.knarr.steamStatus().then((s) => { $('btn-add-self-steam').hidden = !s.found; });
   $('settings-modal').hidden = false;
 }
 
@@ -1989,7 +2001,7 @@ async function testConnection() {
   const result = $('cfg-test-result');
   result.className = 'small';
   result.textContent = 'Testing…';
-  const res = await window.r2sd.testConnection({
+  const res = await window.knarr.testConnection({
     baseUrl: $('cfg-url').value,
     username: $('cfg-username').value,
     password: $('cfg-password').value,
@@ -2008,7 +2020,7 @@ async function testConnection() {
 }
 
 async function saveSettings() {
-  await window.r2sd.setConfig({
+  await window.knarr.setConfig({
     baseUrl: $('cfg-url').value,
     username: $('cfg-username').value,
     password: $('cfg-password').value,
@@ -2251,16 +2263,16 @@ function gpPlatformStep(delta) {
   if (next && next !== items[at]) next.click();
 }
 
-// A game launched from Play gets the controller; R2SD must not. Set/cleared by
+// A game launched from Play gets the controller; Knarr must not. Set/cleared by
 // the main process around the game's lifetime (game:running / game:exited).
 // Untracked launches (bare-exe Faugus, i.e. no exit signal) stay "running"
-// until the user brings R2SD back to the front.
+// until the user brings Knarr back to the front.
 let gameRunning = null; // null | 'tracked' | 'untracked'
-window.r2sd.onGameRunning((e) => { gameRunning = e.exitTracked ? 'tracked' : 'untracked'; gp.prev = { a: true, b: true }; });
-window.r2sd.onGameExited(() => { gameRunning = null; gp.prev = { a: true, b: true }; });
+window.knarr.onGameRunning((e) => { gameRunning = e.exitTracked ? 'tracked' : 'untracked'; gp.prev = { a: true, b: true }; });
+window.knarr.onGameExited(() => { gameRunning = null; gp.prev = { a: true, b: true }; });
 window.addEventListener('focus', () => { if (gameRunning === 'untracked') gameRunning = null; gp.prev = { a: true, b: true }; });
 
-/** Only a focused, visible R2SD with no game running reads the controller. */
+/** Only a focused, visible Knarr with no game running reads the controller. */
 function gpMayRead() {
   return !gameRunning && document.visibilityState === 'visible' && document.hasFocus();
 }
@@ -2323,32 +2335,32 @@ $('btn-close-settings').addEventListener('click', closeSettings);
 $('btn-test').addEventListener('click', testConnection);
 $('btn-save').addEventListener('click', saveSettings);
 $('btn-clear-cache').addEventListener('click', async () => {
-  await window.r2sd.clearCache();
+  await window.knarr.clearCache();
   $('cfg-test-result').className = 'small success';
   $('cfg-test-result').textContent = 'Cache cleared.';
 });
-$('btn-quit').addEventListener('click', () => { window.r2sd.quitApp(); });
+$('btn-quit').addEventListener('click', () => { window.knarr.quitApp(); });
 $('btn-filehandler').addEventListener('click', async () => {
   const btn = $('btn-filehandler');
   const enable = btn.textContent.startsWith('Add');
   btn.disabled = true;
   try {
-    const res = await window.r2sd.setFaugusFileHandler(enable);
+    const res = await window.knarr.setFaugusFileHandler(enable);
     if (res.error) toast(res.error, 'error');
     else toast(enable ? 'Added — right-click an .exe and choose Open With' : 'Removed from the file manager', 'success');
-    renderFaugusSetting(await window.r2sd.getConfig());
+    renderFaugusSetting(await window.knarr.getConfig());
   } finally { btn.disabled = false; }
 });
-initDropdown('cfg-uiscale', async (value) => { renderUiScale(await window.r2sd.setUiScale(value)); });
-initDropdown('cfg-faugus', async (value) => { renderFaugusSetting(await window.r2sd.setConfig({ faugus: value })); });
+initDropdown('cfg-uiscale', async (value) => { renderUiScale(await window.knarr.setUiScale(value)); });
+initDropdown('cfg-faugus', async (value) => { renderFaugusSetting(await window.knarr.setConfig({ faugus: value })); });
 setDropdownOptions('cfg-faugus', FAUGUS_OPTIONS, 'auto');
-initDropdown('cfg-faugusprefix', async (value) => { renderFaugusSetting(await window.r2sd.setConfig({ faugusPrefix: value })); });
+initDropdown('cfg-faugusprefix', async (value) => { renderFaugusSetting(await window.knarr.setConfig({ faugusPrefix: value })); });
 setDropdownOptions('cfg-faugusprefix', FAUGUS_PREFIX_OPTIONS, 'per-game');
-initDropdown('cfg-cloud', async (value) => { renderFaugusSetting(await window.r2sd.setConfig({ cloudSaves: value })); });
+initDropdown('cfg-cloud', async (value) => { renderFaugusSetting(await window.knarr.setConfig({ cloudSaves: value })); });
 setDropdownOptions('cfg-cloud', CLOUD_OPTIONS, 'off');
-initDropdown('cfg-updates', async (value) => { renderUpdateSetting(await window.r2sd.setConfig({ updateCheck: value })); });
-initDropdown('cfg-playwindow', async (value) => { renderPlayWindowSetting(await window.r2sd.setConfig({ playWindow: value })); });
-initDropdown('cfg-playworkspace', async (value) => { renderPlayWindowSetting(await window.r2sd.setConfig({ playWorkspace: value })); });
+initDropdown('cfg-updates', async (value) => { renderUpdateSetting(await window.knarr.setConfig({ updateCheck: value })); });
+initDropdown('cfg-playwindow', async (value) => { renderPlayWindowSetting(await window.knarr.setConfig({ playWindow: value })); });
+initDropdown('cfg-playworkspace', async (value) => { renderPlayWindowSetting(await window.knarr.setConfig({ playWorkspace: value })); });
 setDropdownOptions('cfg-playworkspace', PLAY_WORKSPACE_OPTIONS, 'off');
 setDropdownOptions('cfg-playwindow', PLAY_WINDOW_OPTIONS, 'minimize');
 setDropdownOptions('cfg-updates', UPDATE_OPTIONS, 'auto');
@@ -2356,26 +2368,26 @@ $('btn-check-updates').addEventListener('click', async () => {
   const btn = $('btn-check-updates');
   btn.disabled = true;
   try {
-    const res = await window.r2sd.checkForUpdate();
+    const res = await window.knarr.checkForUpdate();
     if (!res.ok) toast(`Update check failed: ${res.error}`, 'error');
     else if (res.newer) {
-      stickyToast(`RomM2SteamDeck ${res.latest} is available (you have ${res.current})`, [
-        { label: 'Open release', fn: () => window.r2sd.openReleasePage(res.url) },
+      stickyToast(`Knarr ${res.latest} is available (you have ${res.current})`, [
+        { label: 'Open release', fn: () => window.knarr.openReleasePage(res.url) },
         { label: 'Later' },
       ], 'success');
     } else toast(`You're on the latest release (${res.current})`, 'success');
-    renderUpdateSetting(await window.r2sd.getConfig());
+    renderUpdateSetting(await window.knarr.getConfig());
   } finally { btn.disabled = false; }
 });
 setDropdownOptions('cfg-uiscale', UI_SCALE_OPTIONS, 'auto');
-window.r2sd.onUiScaleChanged(renderUiScale); // keyboard shortcuts change it too
+window.knarr.onUiScaleChanged(renderUiScale); // keyboard shortcuts change it too
 $('btn-add-self-steam').addEventListener('click', async () => {
   const btn = $('btn-add-self-steam');
   const out = $('cfg-test-result');
   btn.disabled = true;
   out.className = 'small';
   out.textContent = 'Adding to Steam…';
-  const res = await window.r2sd.addSelfToSteam();
+  const res = await window.knarr.addSelfToSteam();
   btn.disabled = false;
   if (res.error) {
     out.className = 'small error';
@@ -2391,8 +2403,8 @@ $('btn-add-self-steam').addEventListener('click', async () => {
   // Otherwise, point to the manual Launch Option (the reliable route when the
   // SteamClient bridge isn't available — Steam reverts direct file edits).
   const tip = ' For Game Mode: in Steam → Properties → Launch Options set  env LD_PRELOAD= %command%';
-  if (res.repaired) out.textContent = 'Updated the R2SD Steam shortcut.' + tip;
-  else if (res.alreadyPresent) out.textContent = 'RomM2SteamDeck is already in your Steam library.' + tip;
+  if (res.repaired) out.textContent = 'Updated the Knarr Steam shortcut.' + tip;
+  else if (res.alreadyPresent) out.textContent = 'Knarr is already in your Steam library.' + tip;
   else if (res.live) out.textContent = 'Added to Steam — it will appear shortly.' + tip;
   else out.textContent = 'Added to Steam — restart Steam to see it.' + tip;
 });
@@ -2401,8 +2413,8 @@ $('btn-refresh').addEventListener('click', () => {
   loadPlatforms(true);
 });
 // Header Exit — shown on Linux, where Game Mode has no window chrome to close.
-$('btn-exit').addEventListener('click', () => window.r2sd.quitApp());
-window.r2sd.getPlatform().then((p) => { if (p === 'linux') $('btn-exit').hidden = false; });
+$('btn-exit').addEventListener('click', () => window.knarr.quitApp());
+window.knarr.getPlatform().then((p) => { if (p === 'linux') $('btn-exit').hidden = false; });
 // Debounced: each keystroke used to rebuild every card immediately, so typing
 // a 5-letter word on a 5,000-game platform meant five full grid rebuilds.
 let searchTimer = null;
@@ -2449,12 +2461,12 @@ $('btn-installed').addEventListener('click', async () => {
   applyInstalledFilterButton();
   renderGrid();
   renderPlatforms();
-  await window.r2sd.setConfig({ installedOnly: state.installedOnly });
+  await window.knarr.setConfig({ installedOnly: state.installedOnly });
 });
 $('btn-view').addEventListener('click', async () => {
   state.view = state.view === 'list' ? 'grid' : 'list';
   applyView();
-  await window.r2sd.setConfig({ view: state.view });
+  await window.knarr.setConfig({ view: state.view });
 });
 $('btn-theme').addEventListener('click', () => { renderThemeGrid(); $('theme-modal').hidden = false; });
 $('theme-close').addEventListener('click', () => { $('theme-modal').hidden = true; });
@@ -2463,7 +2475,7 @@ $('theme-backdrop').addEventListener('click', () => { $('theme-modal').hidden = 
 $('btn-close-detail').addEventListener('click', closeDetail);
 $('detail-backdrop').addEventListener('click', closeDetail);
 $('btn-dl').addEventListener('click', () => state.detailRom && startDownloadFor(state.detailRom));
-$('btn-dl-cancel').addEventListener('click', () => state.detailRom && window.r2sd.cancelDownload(state.detailRom.id));
+$('btn-dl-cancel').addEventListener('click', () => state.detailRom && window.knarr.cancelDownload(state.detailRom.id));
 $('btn-dl-delete').addEventListener('click', () => state.detailRom && deleteDownloadFor(state.detailRom));
 $('btn-shortcut').addEventListener('click', () => state.detailRom && openExePicker(state.detailRom));
 $('btn-folders').addEventListener('click', () => state.detailRom && openFoldersModal(state.detailRom));
@@ -2475,24 +2487,24 @@ $('history-backdrop').addEventListener('click', closeHistoryModal);
 $('syncs-backdrop').addEventListener('click', closeSyncsModal);
 $('syncs-include').addEventListener('change', async (e) => {
   if (!syncsCtx) return;
-  await window.r2sd.setIncludeConfig(syncsCtx.rom.id, e.target.checked);
+  await window.knarr.setIncludeConfig(syncsCtx.rom.id, e.target.checked);
   await renderSyncs();
 });
 $('syncs-patterns-save').addEventListener('click', async () => {
   const patterns = $('syncs-patterns').value.split('\n').map((s) => s.trim()).filter(Boolean);
-  await window.r2sd.setSaveExcludes(patterns);
+  await window.knarr.setSaveExcludes(patterns);
   toast('Config-file patterns saved', 'success');
   await renderSyncs();
 });
 $('syncs-patterns-reset').addEventListener('click', async () => {
-  await window.r2sd.setSaveExcludes(null);
+  await window.knarr.setSaveExcludes(null);
   toast('Config-file patterns reset to defaults', 'success');
   await renderSyncs();
 });
 $('syncs-paths-save').addEventListener('click', async () => {
   if (!syncsCtx) return;
   const paths = $('syncs-paths').value.split('\n').map((s) => s.trim()).filter(Boolean);
-  const clean = await window.r2sd.setSavePaths(syncsCtx.rom.id, paths);
+  const clean = await window.knarr.setSavePaths(syncsCtx.rom.id, paths);
   toast(clean.length ? `Save locations saved (${clean.length})` : 'Save locations cleared', 'success');
   $('syncs-paths').blur();
   await renderSyncs();
@@ -2502,7 +2514,7 @@ $('syncs-paths-detect').addEventListener('click', async () => {
   const btn = $('syncs-paths-detect');
   btn.disabled = true; btn.textContent = 'Looking up…';
   try {
-    const res = await window.r2sd.detectSavePaths(syncsCtx.rom.id);
+    const res = await window.knarr.detectSavePaths(syncsCtx.rom.id);
     if (!res.ok) toast(res.error, 'error');
     else if (!res.found.length) toast('No known save locations for this game — add them by hand, or restore a save from RomM to learn them', 'error');
     else toast(`Found ${res.found.length} save location${res.found.length === 1 ? '' : 's'}`, 'success');
@@ -2530,11 +2542,11 @@ $('pf-autofill').addEventListener('click', () => { autofillPlatformFolders(); ma
 $('pf-base').addEventListener('input', markDirty);
 $('pf-staging').addEventListener('input', markDirty);
 $('pf-base-browse').addEventListener('click', async () => {
-  const picked = await window.r2sd.pickFolder('Base folder for ROMs');
+  const picked = await window.knarr.pickFolder('Base folder for ROMs');
   if (picked) { $('pf-base').value = picked; markDirty(); }
 });
 $('pf-staging-browse').addEventListener('click', async () => {
-  const picked = await window.r2sd.pickFolder('Staging folder for archives');
+  const picked = await window.knarr.pickFolder('Staging folder for archives');
   if (picked) { $('pf-staging').value = picked; markDirty(); }
 });
 
@@ -2542,9 +2554,9 @@ document.addEventListener('keydown', (e) => {
   // UI scale: Ctrl+= / Ctrl+- step, Ctrl+0 back to Auto (persisted; the
   // Settings dropdown follows via onUiScaleChanged).
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
-    if (e.key === '=' || e.key === '+') { e.preventDefault(); window.r2sd.stepUiScale(1); return; }
-    if (e.key === '-' || e.key === '_') { e.preventDefault(); window.r2sd.stepUiScale(-1); return; }
-    if (e.key === '0') { e.preventDefault(); window.r2sd.setUiScale('auto'); return; }
+    if (e.key === '=' || e.key === '+') { e.preventDefault(); window.knarr.stepUiScale(1); return; }
+    if (e.key === '-' || e.key === '_') { e.preventDefault(); window.knarr.stepUiScale(-1); return; }
+    if (e.key === '0') { e.preventDefault(); window.knarr.setUiScale('auto'); return; }
   }
   if (e.key === 'Escape') {
     // Same as the controller's B: an open menu first, then one window at a time
@@ -2567,11 +2579,11 @@ $('dl-sb-toggle').addEventListener('click', () => {
   await reloadConfig();
   await reloadDownloads();
   try {
-    const q = await window.r2sd.getQueue();
+    const q = await window.knarr.getQueue();
     state.queue = q.items || [];
     renderQueueBar();
   } catch { /* no queue yet */ }
-  const configured = await window.r2sd.isConfigured();
+  const configured = await window.knarr.isConfigured();
   if (!configured) {
     openSettings();
     return;

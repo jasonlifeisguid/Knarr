@@ -19,6 +19,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { promisify } from 'util';
 import { isInsideFolder } from './fsutil';
+import * as brand from './brand';
 
 const execFileP = promisify(execFile);
 
@@ -141,8 +142,8 @@ export function findSteamUsers(root = findSteamRoot()): SteamUser[] {
  *
  * Linux/macOS: exact-name matches only. The previous check fell through to
  * `pgrep -i steam`, which matches ANY process whose name contains "steam" —
- * including this app's own process (`romm2steamdeck-…`) — so it reported Steam
- * as running whenever R2SD itself was running, which made the file-write path
+ * including this app's own process in 2.x (`romm2steamdeck-…`) — so it reported Steam
+ * as running whenever the app itself was running, which made the file-write path
  * unreachable on the Deck. (procps `pgrep` also accepts only one pattern, so the
  * old `pgrep -x steam steamwebhelper` form errored out and never matched.)
  */
@@ -189,7 +190,7 @@ export interface AddResult {
 // startup fork() races them — intermittently deadlocking / adding a ~45s delay
 // under gamescope. Setting AllowOverlay=0 alone does NOT stop the preload for a
 // non-Steam game; stripping LD_PRELOAD via launch options does. Verified on real
-// hardware. Only applied to R2SD (an Electron app), never to game shortcuts.
+// hardware. Only applied to Knarr (an Electron app), never to game shortcuts.
 export const OVERLAY_STRIP_LAUNCH_OPTS = 'env LD_PRELOAD= %command%';
 
 export function buildShortcutEntry(exePath: string, appName: string, opts: { startDir?: string; tags?: string[]; overlayOff?: boolean } = {}): VdfMap {
@@ -263,9 +264,9 @@ export async function addNonSteamGame(exePath: string, appName: string, opts: { 
 
     const shortcuts = (root.shortcuts as VdfMap) || (root.shortcuts = {} as VdfMap);
     const quotedExe = `"${exePath}"`;
-    const isR2SD = /RomM2SteamDeck[^"]*\.AppImage/i.test(exePath);
+    const isSelf = brand.isOwnAppImage(exePath);
 
-    // Repair every existing R2SD (Electron) shortcut: overlay off AND LD_PRELOAD
+    // Repair every existing Knarr / 2.x RomM2SteamDeck (Electron) shortcut: overlay off AND LD_PRELOAD
     // stripped via launch options (the flag alone doesn't stop the preload). This
     // races Electron's startup fork and slows/deadlocks Game Mode. Also fixes
     // duplicate/older entries added earlier via the live path. Game shortcuts are
@@ -277,8 +278,8 @@ export async function addNonSteamGame(exePath: string, appName: string, opts: { 
       const e = entry as VdfMap;
       const exe = typeof e.Exe === 'string' ? e.Exe : '';
       if (e.Exe === quotedExe) exactExists = true;
-      const isR2SDEntry = e.Exe === quotedExe ? isR2SD : /RomM2SteamDeck[^"]*\.AppImage/i.test(exe);
-      if (isR2SDEntry) {
+      const isSelfEntry = e.Exe === quotedExe ? isSelf : brand.isOwnAppImage(exe);
+      if (isSelfEntry) {
         if (e.AllowOverlay !== 0) { e.AllowOverlay = 0; changed = true; }
         if (e.LaunchOptions !== OVERLAY_STRIP_LAUNCH_OPTS) { e.LaunchOptions = OVERLAY_STRIP_LAUNCH_OPTS; changed = true; }
       }
@@ -299,7 +300,7 @@ export async function addNonSteamGame(exePath: string, appName: string, opts: { 
     // Add the entry only if it's not already there (otherwise we just repaired it).
     let appId = 0;
     if (!exactExists) {
-      const entry = buildShortcutEntry(exePath, appName, { startDir: opts.startDir, tags: opts.tags, overlayOff: isR2SD });
+      const entry = buildShortcutEntry(exePath, appName, { startDir: opts.startDir, tags: opts.tags, overlayOff: isSelf });
       shortcuts[nextShortcutKey(shortcuts)] = entry;
       appId = entry.appid as number;
     }
@@ -313,6 +314,129 @@ export async function addNonSteamGame(exePath: string, appName: string, opts: { 
     return { ok: true, appId, appName, backupPath, targetUser: target.user, method: 'file', repaired: exactExists && changed };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// ── Steam library artwork, written as files ──────────────────────────────
+//
+// With Steam closed, artwork for a shortcut is just files in the user's
+// config/grid folder, named after the shortcut's unsigned appid. Steam picks
+// them up on its next start. (With Steam running, steamclient.setArtwork does
+// the same live.)
+
+export interface GridArtwork {
+  capsule?: Buffer;   // portrait library tile, 600x900   -> <appid>p.png
+  wide?: Buffer;      // wide capsule, 920x430             -> <appid>.png
+  hero?: Buffer;      // banner behind the game page       -> <appid>_hero.png
+  logo?: Buffer;      // transparent logo over the hero    -> <appid>_logo.png
+  icon?: Buffer;      // small icon                        -> <appid>_icon.png
+}
+
+const GRID_FILES: Record<keyof GridArtwork, string> = {
+  capsule: 'p.png', wide: '.png', hero: '_hero.png', logo: '_logo.png', icon: '_icon.png',
+};
+
+/** Write a shortcut's artwork into `configDir`/grid. Existing files are left alone unless
+ *  `replace` is set, so artwork the user picked themselves (SteamGridDB...) survives.
+ *  Returns the written paths, keyed by kind. */
+export function writeGridArtwork(configDir: string, appId: number, art: GridArtwork, replace = false): Partial<Record<keyof GridArtwork, string>> {
+  const grid = path.join(configDir, 'grid');
+  fs.mkdirSync(grid, { recursive: true });
+  const id = appId >>> 0;
+  const out: Partial<Record<keyof GridArtwork, string>> = {};
+  for (const kind of Object.keys(GRID_FILES) as (keyof GridArtwork)[]) {
+    const data = art[kind];
+    if (!data) continue;
+    const file = path.join(grid, `${id}${GRID_FILES[kind]}`);
+    if (!replace && fs.existsSync(file)) continue;
+    fs.writeFileSync(file, data);
+    out[kind] = file;
+  }
+  return out;
+}
+
+/** The config folder of the Steam user that owns the shortcut whose Exe is `exePath`. */
+export function configDirForShortcut(exePath: string): string | null {
+  const quoted = `"${exePath}"`;
+  for (const u of findSteamUsers()) {
+    try {
+      const shortcuts = (parseVdf(fs.readFileSync(u.shortcutsPath)).shortcuts as VdfMap) || {};
+      if (Object.values(shortcuts).some((e) => e && typeof e === 'object' && (e as VdfMap).Exe === quoted)) return u.configDir;
+    } catch { /* no shortcuts file for this user */ }
+  }
+  return null;
+}
+
+// ── Repointing 2.x shortcuts (RomM2SteamDeck -> Knarr) ───────────────────
+
+export interface LegacyShortcut { appId: number; exe: string; name: string; configDir: string; }
+
+/** Shortcuts that still launch a 2.x RomM2SteamDeck AppImage or .exe. Read-only. */
+export function findLegacyShortcuts(): LegacyShortcut[] {
+  const found: LegacyShortcut[] = [];
+  for (const u of findSteamUsers()) {
+    try {
+      const shortcuts = (parseVdf(fs.readFileSync(u.shortcutsPath)).shortcuts as VdfMap) || {};
+      for (const entry of Object.values(shortcuts)) {
+        if (!entry || typeof entry !== 'object') continue;
+        const e = entry as VdfMap;
+        if (typeof e.Exe === 'string' && brand.isLegacyLauncher(e.Exe) && typeof e.appid === 'number') {
+          found.push({ appId: e.appid >>> 0, exe: e.Exe, name: typeof e.AppName === 'string' ? e.AppName : '', configDir: u.configDir });
+        }
+      }
+    } catch { /* no shortcuts file for this user */ }
+  }
+  return found;
+}
+
+export interface RepointResult { ok: boolean; repointed: LegacyShortcut[]; backups: string[]; steamRunning?: boolean; error?: string; }
+
+/**
+ * Point every 2.x shortcut at `exePath`, in place: same entry and appid (so playtime and
+ * artwork stay), new Exe and StartDir, and the name "Knarr" unless the user had renamed it.
+ * Like adding, this needs Steam closed; with Steam running it changes nothing and says so
+ * (the caller can then try the live SteamClient path). Byte-safe, with a backup per file.
+ */
+export async function repointLegacyShortcuts(exePath: string): Promise<RepointResult> {
+  if (await isSteamRunning()) return { ok: false, repointed: [], backups: [], steamRunning: true };
+  const repointed: LegacyShortcut[] = [];
+  const backups: string[] = [];
+  const quotedExe = `"${exePath}"`;
+  const dir = path.dirname(exePath);
+  const startDir = dir.endsWith(path.sep) ? dir : dir + path.sep; // as buildShortcutEntry writes it
+  try {
+    for (const u of findSteamUsers()) {
+      if (!fs.existsSync(u.shortcutsPath)) continue;
+      const original = fs.readFileSync(u.shortcutsPath);
+      const root = parseVdf(original);
+      if (!serializeVdf(root).equals(original)) {
+        return { ok: false, repointed, backups, error: 'Could not reproduce shortcuts.vdf byte-for-byte, so it was left alone.' };
+      }
+      const shortcuts = (root.shortcuts as VdfMap) || {};
+      let changed = false;
+      for (const entry of Object.values(shortcuts)) {
+        if (!entry || typeof entry !== 'object') continue;
+        const e = entry as VdfMap;
+        if (typeof e.Exe !== 'string' || !brand.isLegacyLauncher(e.Exe)) continue;
+        const was: LegacyShortcut = { appId: (e.appid as number) >>> 0, exe: e.Exe, name: String(e.AppName ?? ''), configDir: u.configDir };
+        e.Exe = quotedExe;
+        e.StartDir = startDir;
+        if (e.AppName === brand.LEGACY_APP_NAME) e.AppName = brand.APP_NAME;
+        if (brand.isOwnAppImage(quotedExe)) { e.AllowOverlay = 0; e.LaunchOptions = OVERLAY_STRIP_LAUNCH_OPTS; }
+        repointed.push(was);
+        changed = true;
+      }
+      if (!changed) continue;
+      const backupPath = `${u.shortcutsPath}.bak-${Date.now()}`;
+      fs.writeFileSync(backupPath, original);
+      backups.push(backupPath);
+      const tmp = `${u.shortcutsPath}.tmp`;
+      fs.writeFileSync(tmp, serializeVdf(root));
+      fs.renameSync(tmp, u.shortcutsPath);
+    }
+    return { ok: true, repointed, backups };
+  } catch (err) {
+    return { ok: false, repointed, backups, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

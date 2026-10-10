@@ -1,7 +1,7 @@
 /**
  * Where does this game keep its saves? (Windows scope discovery.)
  *
- * On Windows every game writes into the one real user profile, so R2SD needs
+ * On Windows every game writes into the one real user profile, so Knarr needs
  * a per-game list of profile-relative save locations ("Documents/My Games/X")
  * before it can back up or sync anything. Sources, most reliable first:
  *
@@ -194,7 +194,7 @@ export async function getIndex(cacheFile: string, opts: { fetch?: FetchLike; max
   inflight = (async () => {
     try {
       const doFetch = opts.fetch ?? (globalThis.fetch as unknown as FetchLike);
-      const headers: Record<string, string> = { 'User-Agent': 'RomM2SteamDeck' };
+      const headers: Record<string, string> = { 'User-Agent': 'Knarr' };
       if (cached?.etag) headers['If-None-Match'] = cached.etag;
       const res = await doFetch(MANIFEST_URL, { headers });
       if (res.status === 304 && cached) {

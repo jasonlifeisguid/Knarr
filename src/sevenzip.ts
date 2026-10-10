@@ -1,7 +1,7 @@
 /**
  * Where the bundled 7-Zip is.
  *
- * R2SD ships the official 7-Zip binaries (vendor/7zip, see its README for
+ * Knarr ships the official 7-Zip binaries (vendor/7zip, see its README for
  * provenance and hashes) instead of the `7zip-bin` npm package, which was
  * stuck on 7-Zip 21.07 from 2021 — several security fixes behind. Each
  * platform build carries only its own binary, in resources/7zip/.

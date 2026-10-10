@@ -36,14 +36,14 @@ test('guessTitle: the nearest folder that is not a bin-style one', () => {
 });
 
 test('handlerDesktopContents claims the mime type real .exe files actually have', () => {
-  const d = cli.handlerDesktopContents('/home/jason/Applications/RomM2SteamDeck.AppImage');
+  const d = cli.handlerDesktopContents('/home/jason/Applications/Knarr.AppImage');
   assert.match(d, /^\[Desktop Entry\]$/m);
-  assert.match(d, /^Exec=\/home\/jason\/Applications\/RomM2SteamDeck\.AppImage --run-exe %f$/m);
+  assert.match(d, /^Exec=\/home\/jason\/Applications\/Knarr\.AppImage --run-exe %f$/m);
   // Faugus's own entry only lists x-ms-dos-executable, which modern .exe files are not
   assert.match(d, /MimeType=.*application\/vnd\.microsoft\.portable-executable/);
   assert.match(d, /^NoDisplay=true$/m);
   // a path with spaces is quoted for Exec
-  assert.match(cli.handlerDesktopContents('/home/j/My Apps/R2SD.AppImage'), /^Exec="\/home\/j\/My Apps\/R2SD\.AppImage" --run-exe %f$/m);
+  assert.match(cli.handlerDesktopContents('/home/j/My Apps/Knarr.AppImage'), /^Exec="\/home\/j\/My Apps\/Knarr\.AppImage" --run-exe %f$/m);
 });
 
 test('gameDesktopContents matches the shape Faugus writes for its own shortcuts', () => {
@@ -82,7 +82,7 @@ function fakeDesktopEnv() {
 
 test('installFileHandler writes the entry and refreshes the desktop database', () => {
   const env = fakeDesktopEnv();
-  const res = cli.installFileHandler('/home/j/Applications/R2SD.AppImage', env);
+  const res = cli.installFileHandler('/home/j/Applications/Knarr.AppImage', env);
   const expected = '/home/j/.local/share/applications/' + cli.HANDLER_DESKTOP_ID;
   assert.deepEqual(res, { ok: true, file: expected });
   assert.match(env.files[expected], /--run-exe %f/);
@@ -97,6 +97,27 @@ test('installFileHandler writes the entry and refreshes the desktop database', (
   assert.equal(bad.ok, false);
   assert.match(bad.error, /own path/);
   assert.deepEqual(Object.keys(env2.files), []);
+});
+
+test('2.x "Run with Faugus (R2SD)" handler is replaced, keeping it the .exe default if it was', () => {
+  const env = fakeDesktopEnv();
+  const dir = '/home/j/.local/share/applications/';
+  env.files[dir + cli.LEGACY_HANDLER_DESKTOP_ID] = 'old';
+  assert.equal(cli.fileHandlerInstalled(env), true, 'the 2.x entry counts as installed');
+  env.output = (cmd, args) => (args[0] === 'query' ? cli.LEGACY_HANDLER_DESKTOP_ID + '\n' : '');
+  assert.equal(cli.migrateLegacyFileHandler('/home/j/Applications/Knarr.AppImage', env), true);
+  assert.equal(dir + cli.LEGACY_HANDLER_DESKTOP_ID in env.files, false, 'old entry removed');
+  assert.match(env.files[dir + cli.HANDLER_DESKTOP_ID], /^Exec=\/home\/j\/Applications\/Knarr\.AppImage --run-exe %f$/m);
+  assert.ok(env.ran.some((r) => r.startsWith('xdg-mime default ' + cli.HANDLER_DESKTOP_ID)), 'still the default');
+  // nothing to migrate the second time
+  assert.equal(cli.migrateLegacyFileHandler('/home/j/Applications/Knarr.AppImage', env), false);
+
+  // an Open With entry that was not the default stays just an Open With entry
+  const env2 = fakeDesktopEnv();
+  env2.files[dir + cli.LEGACY_HANDLER_DESKTOP_ID] = 'old';
+  env2.output = () => 'faugus-launcher.desktop\n';
+  assert.equal(cli.migrateLegacyFileHandler('/home/j/Applications/Knarr.AppImage', env2), true);
+  assert.ok(!env2.ran.some((r) => r.startsWith('xdg-mime default')));
 });
 
 // ── runExe, with Faugus stubbed ────────────────────────────────────────────

@@ -121,7 +121,7 @@ test('registerGame creates a minimal entry with its own prefix and keeps a backu
     prefix: '/home/deck/Faugus/assassins-creed-shadows', runner: 'Proton-CachyOS Latest',
     cover: path.join(HOME, '.local/share/faugus-launcher/covers/assassins-creed-shadows.png'),
   });
-  assert.ok(env.written[GAMES_JSON + '.r2sd-bak'], 'previous games.json backed up');
+  assert.ok(env.written[GAMES_JSON + '.knarr-bak'], 'previous games.json backed up');
   assert.ok(env.written[GAMES_JSON].endsWith('\n'));
 });
 
@@ -168,7 +168,7 @@ test('repointGame moves an existing entry to a new exe, keeping gameid/prefix/co
   const written = JSON.parse(env.written[GAMES_JSON]);
   assert.equal(written.length, 1, 'no duplicate entry');
   assert.deepEqual(written[0], { ...REPOINT_ENTRY[0], path: '/g/SB/bin/SB-Win64-Shipping.exe' });
-  assert.deepEqual(env.copied, [[GAMES_JSON, GAMES_JSON + '.r2sd-bak']]);
+  assert.deepEqual(env.copied, [[GAMES_JSON, GAMES_JSON + '.knarr-bak']]);
 });
 
 test('repointGame + registerGame: the pair never creates a second prefix for one game', () => {

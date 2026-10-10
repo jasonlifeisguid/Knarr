@@ -163,7 +163,7 @@ export interface LaunchOptions {
  *
  * Resolves only once the OS has started the process (or refused to), so a
  * game that can't start is reported as an error — not as "Launching…" with
- * R2SD minimized and nothing happening.
+ * Knarr minimized and nothing happening.
  */
 export async function launchGame(exePath: string, opts: LaunchOptions = {}): Promise<LaunchResult> {
   if (!exePath || !fs.existsSync(exePath)) return { ok: false, error: 'Executable not found' };
@@ -281,12 +281,12 @@ export function createShortcut(exePath: string, gameName: string, opts: { faugus
       // the command string — so a path containing $(...) can't execute.
       const ps =
         '$ws = New-Object -ComObject WScript.Shell;' +
-        '$s = $ws.CreateShortcut($env:R2SD_SHORTCUT);' +
-        '$s.TargetPath = $env:R2SD_TARGET;' +
-        '$s.WorkingDirectory = $env:R2SD_WORKDIR;' +
+        '$s = $ws.CreateShortcut($env:KNARR_SHORTCUT);' +
+        '$s.TargetPath = $env:KNARR_TARGET;' +
+        '$s.WorkingDirectory = $env:KNARR_WORKDIR;' +
         '$s.Save()';
       const result = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], {
-        env: { ...process.env, R2SD_SHORTCUT: shortcutPath, R2SD_TARGET: exePath, R2SD_WORKDIR: workingDir },
+        env: { ...process.env, KNARR_SHORTCUT: shortcutPath, KNARR_TARGET: exePath, KNARR_WORKDIR: workingDir },
         windowsHide: true,
       });
       if (result.status !== 0) {

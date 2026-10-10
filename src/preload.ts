@@ -4,7 +4,7 @@ import { contextBridge, ipcRenderer } from 'electron';
  * The only surface the renderer can touch. Everything else (network, fs,
  * credentials) stays in the main process.
  */
-contextBridge.exposeInMainWorld('r2sd', {
+contextBridge.exposeInMainWorld('knarr', {
   // Config
   getConfig: () => ipcRenderer.invoke('config:get'),
   isConfigured: () => ipcRenderer.invoke('config:isConfigured'),
@@ -82,6 +82,11 @@ contextBridge.exposeInMainWorld('r2sd', {
     ipcRenderer.on('game:exited', (_e, payload) => cb(payload)),
   onCloudEvent: (cb: (payload: unknown) => void) =>
     ipcRenderer.on('cloud:event', (_e, payload) => cb(payload)),
+  // 3.0.0 rename: the 2.x Steam shortcut was repointed, or couldn't be yet
+  onSteamRepointed: (cb: (payload: unknown) => void) =>
+    ipcRenderer.on('steam:repointed', (_e, payload) => cb(payload)),
+  onSteamRepointPending: (cb: (payload: unknown) => void) =>
+    ipcRenderer.on('steam:repoint-pending', (_e, payload) => cb(payload)),
   restoreSaves: (romId: number, prefixRoot: string) => ipcRenderer.invoke('saves:restore', romId, prefixRoot),
 
   // Background-refresh + progress events

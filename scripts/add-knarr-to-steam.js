@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * add-r2sd-to-steam.js — add the RomM2SteamDeck AppImage to Steam as a
+ * add-knarr-to-steam.js — add the Knarr AppImage to Steam as a
  * non-Steam game so it shows up in your Library and in Game Mode.
  *
  * Self-contained: no npm dependencies, runs on any Node the Deck has.
@@ -13,8 +13,9 @@
  *   - writes atomically (temp + rename).
  *
  * Usage:
- *   node add-r2sd-to-steam.js [/path/to/RomM2SteamDeck.AppImage] [--name "Display Name"] [--dry-run]
- * With no path, it auto-detects the AppImage in the usual folders.
+ *   node add-knarr-to-steam.js [/path/to/Knarr.AppImage] [--name "Display Name"] [--dry-run]
+ * With no path, it auto-detects the AppImage in the usual folders (Knarr.AppImage,
+ * or a 2.x RomM2SteamDeck.AppImage).
  * --dry-run runs every check (including the byte-exact safety gate) and reports
  * what it WOULD do, without touching shortcuts.vdf.
  */
@@ -107,7 +108,7 @@ function findSteamUsers(root) {
 }
 
 // Exact process-name matches only. `pgrep -i steam` would also match this
-// script's own parent shell or the running R2SD app (romm2steamdeck-…), and
+// script's own parent shell or a running 2.x app (romm2steamdeck-…), and
 // procps pgrep accepts a single pattern, so each name is checked separately.
 function isSteamRunning() {
   for (const name of ['steam', 'steamwebhelper', 'steam_osx']) {
@@ -159,7 +160,7 @@ function autoDetectAppImage() {
   for (const d of dirs) {
     if (!fs.existsSync(d)) continue;
     for (const f of fs.readdirSync(d)) {
-      if (/^RomM2SteamDeck.*\.AppImage$/i.test(f)) hits.push(path.join(d, f));
+      if (/^(Knarr|RomM2SteamDeck).*\.AppImage$/i.test(f)) hits.push(path.join(d, f));
     }
   }
   // Prefer the newest by mtime
@@ -169,10 +170,10 @@ function autoDetectAppImage() {
 // Best-effort: pull the app icon out of the AppImage so Steam shows it.
 function extractIcon(appImage) {
   try {
-    const destDir = path.join(os.homedir(), '.local', 'share', 'RomM2SteamDeck');
+    const destDir = path.join(os.homedir(), '.local', 'share', 'Knarr');
     fs.mkdirSync(destDir, { recursive: true });
     const iconOut = path.join(destDir, 'icon.png');
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'r2sd-icon-'));
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'knarr-icon-'));
     execSync(`"${appImage}" --appimage-extract .DirIcon`, { cwd: tmp, stdio: 'ignore' });
     let src = path.join(tmp, 'squashfs-root', '.DirIcon');
     // .DirIcon is often a symlink to the real png inside the squashfs; resolve it.
@@ -219,7 +220,7 @@ function addLive(appImage) {
 function main() {
   const args = process.argv.slice(2);
   let appImage = null;
-  let name = 'RomM2SteamDeck';
+  let name = 'Knarr';
   let dryRun = false;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--name') { name = args[++i] || name; }
@@ -229,8 +230,8 @@ function main() {
   if (!appImage) appImage = autoDetectAppImage();
 
   if (!appImage) {
-    console.error('✗ Could not find a RomM2SteamDeck AppImage. Pass its path:\n' +
-      '    node add-r2sd-to-steam.js /path/to/RomM2SteamDeck.AppImage');
+    console.error('✗ Could not find a Knarr AppImage. Pass its path:\n' +
+      '    node add-knarr-to-steam.js /path/to/Knarr.AppImage');
     process.exit(1);
   }
   appImage = path.resolve(appImage);
@@ -326,7 +327,7 @@ function main() {
   console.log(`    Steam user: ${target.user}`);
   if (icon) console.log(`    Icon      : ${icon}`);
   if (backupPath) console.log(`    Backup    : ${backupPath}`);
-  console.log('\n  Start Steam (or switch back to Game Mode). RomM2SteamDeck will be in your\n' +
+  console.log('\n  Start Steam (or switch back to Game Mode). Knarr will be in your\n' +
     '  Library under "Non-Steam". In Game Mode you may want to set a controller layout.');
 }
 

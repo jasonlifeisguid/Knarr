@@ -2,9 +2,10 @@
  * Cloud saves through RomM.
  *
  * RomM keeps saves per user and per rom, versioned, with a `slot` label and an
- * MD5 `content_hash`. R2SD stores its save zips (see saves.ts) under slot
- * "r2sd" / emulator "proton", keeping the last few versions, and remembers per
- * game what this device last synced:
+ * MD5 `content_hash`. Knarr stores its save zips (see saves.ts) under slot
+ * "r2sd" / emulator "proton" (the slot keeps its 2.x name: it is how existing
+ * saves are found), keeping the last few versions, and remembers per game what
+ * this device last synced:
  *
  *   record.cloud = { saveId, contentHash, fingerprint, syncedAt }
  *
@@ -29,6 +30,7 @@ import * as path from 'path';
 import { RommClient, RommSave } from './romm';
 import * as saves from './saves';
 
+// Stored on the RomM server since 2.x: renaming it would hide every existing cloud save.
 export const CLOUD_SLOT = 'r2sd';
 export const CLOUD_EMULATOR = 'proton';
 export const KEEP_VERSIONS = 5;
@@ -120,7 +122,7 @@ export interface SyncResult { ok: boolean; error?: string; saveId?: number; file
 
 /** Zip the prefix's saves and upload as a new version. Records the sync point. */
 export async function upload(deps: CloudDeps, romId: number, target: saves.SaveTarget, gameName: string): Promise<SyncResult> {
-  const tmp = fs.mkdtempSync(path.join(deps.tmpDir || os.tmpdir(), 'r2sd-cloud-'));
+  const tmp = fs.mkdtempSync(path.join(deps.tmpDir || os.tmpdir(), 'knarr-cloud-'));
   const file = path.join(tmp, saves.backupFileName(gameName));
   try {
     const z = await saves.zipSaves(target, file, rulesOf(deps));
@@ -137,10 +139,10 @@ export async function upload(deps: CloudDeps, romId: number, target: saves.SaveT
 
 /** Fetch the latest cloud version and restore it into the prefix. Records the sync point. */
 export async function download(deps: CloudDeps, romId: number, target: saves.SaveTarget, opts: { createProfile?: boolean } = {}): Promise<SyncResult> {
-  const tmp = fs.mkdtempSync(path.join(deps.tmpDir || os.tmpdir(), 'r2sd-cloud-'));
+  const tmp = fs.mkdtempSync(path.join(deps.tmpDir || os.tmpdir(), 'knarr-cloud-'));
   try {
     const rem = await latestRemote(deps.client, romId);
-    if (!rem) return { ok: false, error: 'No R2SD save for this game on RomM yet' };
+    if (!rem) return { ok: false, error: 'No Knarr save for this game on RomM yet' };
     const content = await deps.client.downloadSave(rem.save.id, deps.deviceId || undefined);
     const file = path.join(tmp, 'cloud.zip');
     fs.writeFileSync(file, content);
@@ -175,7 +177,7 @@ export interface CloudVersion {
   current: boolean;
 }
 
-/** R2SD's versions of this game's saves on RomM, newest first. */
+/** Knarr's versions of this game's saves on RomM, newest first. */
 export async function history(deps: CloudDeps, romId: number): Promise<CloudVersion[]> {
   const all = (await deps.client.listSaves(romId)).filter((s) => s.slot === CLOUD_SLOT);
   all.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id);
@@ -202,7 +204,7 @@ export async function history(deps: CloudDeps, romId: number): Promise<CloudVers
 export async function restoreVersion(
   deps: CloudDeps, romId: number, target: saves.SaveTarget, saveId: number, gameName: string, backupDir: string,
 ): Promise<SyncResult & { backup?: string; reuploaded?: boolean }> {
-  const tmp = fs.mkdtempSync(path.join(deps.tmpDir || os.tmpdir(), 'r2sd-cloud-'));
+  const tmp = fs.mkdtempSync(path.join(deps.tmpDir || os.tmpdir(), 'knarr-cloud-'));
   try {
     const versions = (await deps.client.listSaves(romId)).filter((s) => s.slot === CLOUD_SLOT);
     const pick = versions.find((s) => s.id === saveId);
@@ -260,7 +262,7 @@ export async function restoreVersion(
  * makes its contents unique, and is uploaded again.
  */
 async function uploadAsNewest(deps: CloudDeps, romId: number, file: string, gameName: string, what: string, markFirst = false): Promise<RommSave> {
-  const note = `R2SD · ${gameName} · ${what} · ${new Date().toISOString()}`;
+  const note = `Knarr · ${gameName} · ${what} · ${new Date().toISOString()}`;
   const mark = async () => { const m = await saves.addVersionMarker(file, note); if (!m.ok) throw new Error(m.error); };
   const put = () => deps.client.uploadSave(romId, path.basename(file), fs.readFileSync(file), {
     emulator: CLOUD_EMULATOR, slot: CLOUD_SLOT, deviceId: deps.deviceId || undefined, autocleanupLimit: KEEP_VERSIONS,

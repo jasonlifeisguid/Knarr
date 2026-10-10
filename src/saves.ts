@@ -338,7 +338,7 @@ export function backupFileName(gameName: string, when = new Date()): string {
 /** Copy the listed files into a temp dir laid out like a profile, so one zip
  *  command sees them at their canonical relative paths (redirected folders). */
 function stageFiles(layout: SaveLayout, listing: SaveListing): string {
-  const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'r2sd-stage-'));
+  const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'knarr-stage-'));
   for (const f of listing.included) {
     const top = Object.keys(layout.roots).find((t) => f.rel.toLowerCase().startsWith(t.toLowerCase() + '/'))!;
     const src = path.join(layout.roots[top], f.rel.slice(top.length + 1));
@@ -436,7 +436,7 @@ export async function restoreSaves(target: SaveTarget, zipFile: string, opts: { 
     const wanted = entries.filter(inScope);
     const skipped = entries.length - wanted.length;
     if (!wanted.length) return { ok: false, error: 'Nothing in this backup is inside the game\'s save locations — set them in "What syncs…"' };
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'r2sd-restore-'));
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'knarr-restore-'));
     try {
       const r = await run7za(['x', '-y', '-aoa', `-xr!${VERSION_MARKER}`, `-o${tmp}`, zipFile]);
       if (r.code !== 0) return { ok: false, error: `7za exited ${r.code}: ${r.stderr.slice(0, 300)}` };
@@ -460,7 +460,7 @@ export async function restoreSaves(target: SaveTarget, zipFile: string, opts: { 
     if (r.code !== 0) return { ok: false, error: `7za exited ${r.code}: ${r.stderr.slice(0, 300)}` };
   } else {
     // Redirected folders: extract to a temp dir, then copy each save root to where it really lives.
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'r2sd-restore-'));
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'knarr-restore-'));
     try {
       const r = await run7za(['x', '-y', '-aoa', `-xr!${VERSION_MARKER}`, `-o${tmp}`, zipFile]);
       if (r.code !== 0) return { ok: false, error: `7za exited ${r.code}: ${r.stderr.slice(0, 300)}` };
@@ -492,6 +492,7 @@ export async function restoreSaves(target: SaveTarget, zipFile: string, opts: { 
  * It sits at "AppData/<marker>", outside every save folder: never listed,
  * learned or scoped, and skipped by every restore.
  */
+// Inside save zips already on RomM since 2.x: keeps its name so they are still recognised.
 export const VERSION_MARKER = '.r2sd-version';
 const MARKER_ENTRY = `AppData/${VERSION_MARKER}`;
 
@@ -523,7 +524,7 @@ export async function zipContentKey(file: string): Promise<string | null> {
 
 /** Add (or replace) the version marker inside a save zip. */
 export async function addVersionMarker(zipFile: string, note: string): Promise<SaveResult> {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'r2sd-marker-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'knarr-marker-'));
   try {
     fs.mkdirSync(path.join(tmp, 'AppData'), { recursive: true });
     fs.writeFileSync(path.join(tmp, MARKER_ENTRY), `${note}\n${crypto.randomUUID()}\n`, 'utf8');

@@ -1,11 +1,11 @@
 /**
  * Hyprland integration: put a game launched from Play on its own workspace,
- * fullscreen, and bring R2SD back afterwards.
+ * fullscreen, and bring Knarr back afterwards.
  *
  * Hyprland has no "minimize"; what a desktop user wants is the game on a fresh
  * workspace with nothing else on it. Hyprland can't be told that at spawn time
  * for a Proton game (the window belongs to a grandchild process several forks
- * down: faugus → umu → wine → game), so R2SD watches `hyprctl clients` after
+ * down: faugus → umu → wine → game), so Knarr watches `hyprctl clients` after
  * launch, recognises the game's windows by walking each window's PID ancestry
  * up to the launcher child, and moves/fullscreens them via `hyprctl dispatch`.
  *
@@ -59,8 +59,8 @@ export function isHyprland(env: Record<string, string | undefined> = process.env
   return !!env.HYPRLAND_INSTANCE_SIGNATURE;
 }
 
-/** Windows that never count as "the game": R2SD itself, Faugus's loading window. */
-export const IGNORED_CLASSES = new Set(['romm2steamdeck', 'faugus-launcher']);
+/** Windows that never count as "the game": Knarr itself (also under its 2.x class), Faugus's loading window. */
+export const IGNORED_CLASSES = new Set(['knarr', 'romm2steamdeck', 'faugus-launcher']);
 
 /** Is `ancestor` in pid's parent chain (bounded walk)? */
 export function descendsFrom(pid: number, ancestor: number, ppid: HyprEnv['ppid']): boolean {

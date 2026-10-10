@@ -78,8 +78,8 @@ test('shortcutAppId is deterministic, has the high bit set, and is a signed int3
 });
 
 test('buildShortcutEntry serializes and parses back unchanged', () => {
-  const exe = path.join(os.tmpdir(), 'RomM2SteamDeck.AppImage');
-  const entry = buildShortcutEntry(exe, 'RomM2SteamDeck', { tags: ['RomM'], overlayOff: true });
+  const exe = path.join(os.tmpdir(), 'Knarr.AppImage');
+  const entry = buildShortcutEntry(exe, 'Knarr', { tags: ['RomM'], overlayOff: true });
   assert.equal(entry.Exe, `"${exe}"`);
   assert.equal(entry.AllowOverlay, 0);
   assert.equal(entry.LaunchOptions, OVERLAY_STRIP_LAUNCH_OPTS);

@@ -20,12 +20,13 @@ import * as savepaths from './savepaths';
 import * as updates from './updates';
 import * as hypr from './hyprland';
 import * as cli from './cli';
+import * as brand from './brand';
 
 // Cover art and screenshots are served to the renderer over a private scheme
 // that maps only onto the covers cache directory, so the renderer's CSP no
 // longer needs to allow file: images (which would let any local path render
 // if a path ever leaked into an <img src>). Must be registered before ready.
-const ASSET_SCHEME = 'r2sd-asset';
+const ASSET_SCHEME = 'knarr-asset';
 protocol.registerSchemesAsPrivileged([
   { scheme: ASSET_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: false } },
 ]);
@@ -50,14 +51,16 @@ if (cliHeadless) {
 // tmpfs that works). The only remaining default is --disable-gpu-sandbox, a
 // harmless stability hedge; verified rendering the full UI on SteamOS. Rendering
 // can still be tuned per-device via env vars without a rebuild
-// (R2SD_GL / R2SD_ANGLE / R2SD_OZONE / R2SD_FLAGS). No-ops on Windows/macOS.
+// (KNARR_GL / KNARR_ANGLE / KNARR_OZONE / KNARR_FLAGS; the 2.x R2SD_* names still work).
+// No-ops on Windows/macOS.
 if (process.platform === 'linux' && !cliHeadless) {
-  // Full override for device tuning/diagnostics: R2SD_FLAGS is a space-separated
+  // Full override for device tuning/diagnostics: KNARR_FLAGS is a space-separated
   // list of Chromium switches ("--no-sandbox --use-gl=angle"); an empty string
   // means "no flags at all". When unset, use the safe defaults plus optional
   // per-switch env overrides.
-  if (process.env.R2SD_FLAGS !== undefined) {
-    for (const f of process.env.R2SD_FLAGS.split(/\s+/).filter(Boolean)) {
+  const flags = brand.env('FLAGS');
+  if (flags !== undefined) {
+    for (const f of flags.split(/\s+/).filter(Boolean)) {
       const [k, v] = f.replace(/^--/, '').split('=');
       app.commandLine.appendSwitch(k, v);
     }
@@ -69,25 +72,30 @@ if (process.platform === 'linux' && !cliHeadless) {
     // --disable-gpu-sandbox is harmless and kept as a small stability hedge.
     // (--disable-dev-shm-usage was also removed: on SteamOS it forces Chromium
     // onto /tmp where shm creation fails with a 57k-error flood.)
-    // If a host lacks user namespaces and won't start, set R2SD_FLAGS=--no-sandbox.
+    // If a host lacks user namespaces and won't start, set KNARR_FLAGS=--no-sandbox.
     app.commandLine.appendSwitch('disable-gpu-sandbox');
-    if (process.env.R2SD_GL) app.commandLine.appendSwitch('use-gl', process.env.R2SD_GL);
-    if (process.env.R2SD_ANGLE) app.commandLine.appendSwitch('use-angle', process.env.R2SD_ANGLE);
-    if (process.env.R2SD_OZONE) app.commandLine.appendSwitch('ozone-platform', process.env.R2SD_OZONE);
+    const gl = brand.env('GL'), angle = brand.env('ANGLE'), ozone = brand.env('OZONE');
+    if (gl) app.commandLine.appendSwitch('use-gl', gl);
+    if (angle) app.commandLine.appendSwitch('use-angle', angle);
+    if (ozone) app.commandLine.appendSwitch('ozone-platform', ozone);
   }
 }
 
-// Explicit userData dir. The Electron default (productName "RomM2SteamDeck")
-// collides case-insensitively on Windows with the Python app's
-// %APPDATA%\romm2steamdeck — the two apps merged into one directory and
-// clobbered each other's config.json, and our JSON caches landed inside
-// Chromium's own "Cache" dir.
-const userDataDir = path.join(app.getPath('appData'), 'romm2steamdeck-app');
+// Explicit userData dir. The Electron default (from productName) once collided
+// case-insensitively on Windows with the Python app's %APPDATA%\romm2steamdeck —
+// the two apps merged into one directory and clobbered each other's config.json,
+// and our JSON caches landed inside Chromium's own "Cache" dir. Since 3.0.0 the
+// folder is "knarr"; the 2.x "romm2steamdeck-app" folder is moved there whole on
+// first run (brand.ts), or used where it is if the move fails.
+const userDataMove = brand.migrateUserDataDir(app.getPath('appData'));
+const userDataDir = userDataMove.dir;
+if (userDataMove.moved) console.log('Moved the 2.x settings folder to', userDataDir);
+if (userDataMove.error) console.error('Could not move the 2.x settings folder, using it in place:', userDataMove.error);
 app.setPath('userData', userDataDir);
 migrateLegacyUserData();
 
 /**
- * The path Steam should launch to run R2SD itself. For an AppImage this is the
+ * The path Steam should launch to run Knarr itself. For an AppImage this is the
  * outer .AppImage (Electron sets APPIMAGE), NOT process.execPath (which points
  * inside the read-only mount). Returns null in a dev run, where there's no
  * stable launcher to register.
@@ -96,7 +104,7 @@ function selfLauncherPath(): string | null {
   if (process.platform === 'linux') return process.env.APPIMAGE || null;
   if (process.platform === 'win32') return app.isPackaged ? process.execPath : null;
   if (process.platform === 'darwin') {
-    const m = process.execPath.match(/^(.*\.app)\//); // .../R2SD.app/Contents/MacOS/R2SD → the .app
+    const m = process.execPath.match(/^(.*\.app)\//); // .../Knarr.app/Contents/MacOS/Knarr → the .app
     return m ? m[1] : null;
   }
   return null;
@@ -124,10 +132,11 @@ async function pollShortcutAppId(exePath: string): Promise<number | null> {
 const CAPSULE_ASSET_TYPE = 0;
 
 interface LiveResult { nameLive?: boolean; launchOptionLive?: boolean; protonLive?: boolean; artworkLive?: boolean; }
+interface LiveArtwork { assetType: number; base64: string; imageType: string; }
 
 async function configureShortcutLive(
   exePath: string,
-  opts: { name?: string; launchOptions?: string; compatTool?: string; artwork?: { base64: string; imageType: string } }
+  opts: { name?: string; launchOptions?: string; compatTool?: string; artwork?: { base64: string; imageType: string }; artworkSet?: LiveArtwork[] }
 ): Promise<LiveResult> {
   const appId = await pollShortcutAppId(exePath);
   if (appId === null) return {};
@@ -137,7 +146,102 @@ async function configureShortcutLive(
   if (opts.launchOptions) out.launchOptionLive = (await steamclient.setLaunchOptions(appId, opts.launchOptions)).ok;
   if (opts.compatTool) out.protonLive = (await steamclient.specifyCompatTool(appId, opts.compatTool)).ok;
   if (opts.artwork) out.artworkLive = (await steamclient.setArtwork(appId, opts.artwork.base64, opts.artwork.imageType, CAPSULE_ASSET_TYPE)).ok;
+  if (opts.artworkSet) out.artworkLive = await setArtworkLive(appId, opts.artworkSet);
   return out;
+}
+
+async function setArtworkLive(appId: number, set: LiveArtwork[]): Promise<boolean> {
+  let ok = set.length > 0;
+  for (const a of set) ok = (await steamclient.setArtwork(appId, a.base64, a.imageType, a.assetType)).ok && ok;
+  return ok;
+}
+
+// ── Knarr's own Steam artwork ─────────────────────────────────────────────
+// Bundled in assets/steam (made in docs/branding): library tile, wide tile, hero
+// banner, logo and icon, used when Knarr adds itself to Steam and when a 2.x
+// shortcut is repointed.
+
+function selfArtwork(): steam.GridArtwork {
+  const dir = path.join(app.getAppPath(), 'assets', 'steam');
+  const read = (f: string) => { try { return fs.readFileSync(path.join(dir, f)); } catch { return undefined; } };
+  return {
+    capsule: read('knarr-capsule-600x900.png'), wide: read('knarr-wide-920x430.png'),
+    hero: read('knarr-hero-1920x620.png'), logo: read('knarr-logo.png'), icon: read('knarr-icon.png'),
+  };
+}
+
+function selfArtworkLive(art: steam.GridArtwork): LiveArtwork[] {
+  const t = steamclient.ASSET_TYPE;
+  const pairs: [Buffer | undefined, number][] = [[art.capsule, t.capsule], [art.wide, t.wide], [art.hero, t.hero], [art.logo, t.logo]];
+  return pairs.filter(([b]) => b).map(([b, assetType]) => ({ assetType, base64: b!.toString('base64'), imageType: 'png' }));
+}
+
+/** Artwork as grid files for the shortcut that launches `exePath`. Steam shows them on its next
+ *  start; files the user already has for this shortcut are kept. */
+function writeSelfGridArtwork(exePath: string, art: steam.GridArtwork): boolean {
+  try {
+    const appId = steam.readShortcutAppId(exePath);
+    const configDir = steam.configDirForShortcut(exePath);
+    if (appId === null || !configDir) return false;
+    steam.writeGridArtwork(configDir, appId, art);
+    return true;
+  } catch (err) {
+    console.error('Writing Knarr\'s Steam artwork failed:', err);
+    return false;
+  }
+}
+
+/**
+ * 3.0.0 rename: Steam shortcuts made by 2.x still launch RomM2SteamDeck.AppImage / .exe. Point
+ * them at this launcher, in place (same appid, so playtime and collections stay), rename them
+ * Knarr unless the user had renamed them, and give them Knarr's artwork. With Steam closed the
+ * shortcut file is edited; with Steam running, the live SteamClient bridge (Linux, when
+ * available) does it. Otherwise the user is told once, and it is retried on every start.
+ */
+async function repointLegacySteamShortcuts(): Promise<void> {
+  const self = selfLauncherPath();
+  if (!self || config.getPublicConfig().steamRepoint === 'done') return;
+  const legacy = steam.findLegacyShortcuts();
+  if (!legacy.length) { config.setConfig({ steamRepoint: 'done' }); return; }
+  const art = selfArtwork();
+
+  const res = await steam.repointLegacyShortcuts(self);
+  if (res.ok) {
+    for (const sc of res.repointed) {
+      try { steam.writeGridArtwork(sc.configDir, sc.appId, art); } catch { /* artwork is cosmetic */ }
+    }
+    config.setConfig({ steamRepoint: 'done' });
+    send('steam:repointed', { count: res.repointed.length, restartSteam: false });
+    return;
+  }
+
+  if (res.steamRunning && process.platform === 'linux' && await steamclient.isAvailable()) {
+    const dir = path.dirname(self);
+    let all = true;
+    for (const sc of legacy) {
+      const ok = (await steamclient.setShortcutExe(sc.appId, self)).ok
+        && (await steamclient.setShortcutStartDir(sc.appId, dir.endsWith(path.sep) ? dir : dir + path.sep)).ok;
+      if (ok) {
+        if (sc.name === brand.LEGACY_APP_NAME) await steamclient.setShortcutName(sc.appId, brand.APP_NAME);
+        if (brand.isOwnAppImage(self)) await steamclient.setLaunchOptions(sc.appId, steam.OVERLAY_STRIP_LAUNCH_OPTS);
+        if (!(await setArtworkLive(sc.appId, selfArtworkLive(art)))) {
+          try { steam.writeGridArtwork(sc.configDir, sc.appId, art); } catch { /* cosmetic */ }
+        }
+      }
+      all = all && ok;
+    }
+    if (all) {
+      config.setConfig({ steamRepoint: 'done' });
+      send('steam:repointed', { count: legacy.length, restartSteam: false });
+      return;
+    }
+  }
+
+  if (res.error) console.error('Repointing the 2.x Steam shortcut failed:', res.error);
+  if (config.getPublicConfig().steamRepoint !== 'hinted') {
+    config.setConfig({ steamRepoint: 'hinted' });
+    send('steam:repoint-pending', { steamRunning: !!res.steamRunning, error: res.error || '' });
+  }
 }
 
 // ── Server-hosted images (covers, screenshots) ────────────────────────────
@@ -442,7 +546,7 @@ function rommDeviceId(): Promise<string> {
     deviceRegistration = (async () => {
       try {
         const id = await getClient().registerDevice({
-          name: os.hostname(), platform: process.platform, client: 'RomM2SteamDeck', client_version: app.getVersion(), hostname: os.hostname(),
+          name: os.hostname(), platform: process.platform, client: brand.APP_NAME, client_version: app.getVersion(), hostname: os.hostname(),
         });
         if (id) config.setConfig({ rommDeviceId: id });
         return id || '';
@@ -470,7 +574,7 @@ async function cloudDeps(romId: number): Promise<cloud.CloudDeps> {
 }
 
 // ── Running game ───────────────────────────────────────────────────────────
-// While a game launched from Play runs, R2SD must not react to the controller:
+// While a game launched from Play runs, Knarr must not react to the controller:
 // the Gamepad API keeps delivering the game's button presses to our window
 // (seen on Hyprland: A-presses in a game opened cards and started downloads).
 // The renderer ignores the gamepad while `game:running` is in effect and the
@@ -500,12 +604,12 @@ function gameExited(romId: number, gameName: string): void {
   const wasHypr = runningGame?.romId === romId && runningGame.hyprland;
   if (runningGame?.romId === romId) runningGame = null;
   send('game:exited', { romId, gameName });
-  // Bring R2SD back only if it is still where we put it (the user may have restored it themselves)
+  // Bring Knarr back only if it is still where we put it (the user may have restored it themselves)
   if (wasMinimized && mainWindow && !mainWindow.isDestroyed() && mainWindow.isMinimized()) { mainWindow.restore(); mainWindow.focus(); }
   if (wasHypr && mainWindow && !mainWindow.isDestroyed()) {
-    // The game's workspace is gone with its last window; jump back to R2SD's
+    // The game's workspace is gone with its last window; jump back to Knarr's
     const hy = hypr.realEnv();
-    hypr.findByClass(hy, 'romm2steamdeck').then((w) => { if (w) return hypr.focusWindow(hy, w.address); }).catch(() => { /* cosmetic */ });
+    hypr.findByClass(hy, brand.WINDOW_CLASS).then((w) => { if (w) return hypr.focusWindow(hy, w.address); }).catch(() => { /* cosmetic */ });
     mainWindow.focus();
   }
 }
@@ -654,7 +758,7 @@ function registerIpc(): void {
   ipcMain.handle('update:skip', (_e, version: string) => { config.setConfig({ updateSkip: String(version || '') }); });
   ipcMain.handle('update:open', (_e, url?: string) => {
     // Only ever the project's own release pages
-    const target = typeof url === 'string' && url.startsWith('https://github.com/jasonlifeisguid/RomM2SteamDeck/') ? url : updates.RELEASES_PAGE;
+    const target = typeof url === 'string' && url.startsWith(updates.REPO_PAGE + '/') ? url : updates.RELEASES_PAGE;
     return shell.openExternal(target);
   });
 
@@ -872,7 +976,7 @@ function registerIpc(): void {
     return cloud.restoreVersion(await cloudDeps(romId), romId, tgt, saveId, rec?.romName || 'game', path.join(app.getPath('userData'), 'save-backups'));
   });
   ipcMain.handle('saves:showBackup', (_e, file: string) => {
-    // Only files R2SD itself wrote before a restore
+    // Only files Knarr itself wrote before a restore
     const dir = path.join(app.getPath('userData'), 'save-backups');
     if (typeof file !== 'string' || !isInsideFolder(dir, file) || !fs.existsSync(file)) return false;
     shell.showItemInFolder(file);
@@ -916,7 +1020,7 @@ function registerIpc(): void {
       found: install !== null, method: install?.method ?? null, enabled: config.getPublicConfig().faugus !== 'off',
       // "Run with Faugus" in the file manager's Open With menu (Linux desktop integration)
       fileHandler: process.platform === 'linux'
-        ? fs.existsSync(path.join(cli.applicationsDir(cli.realDesktopEnv()), cli.HANDLER_DESKTOP_ID))
+        ? cli.fileHandlerInstalled()
         : false,
       canInstallHandler: process.platform === 'linux' && selfLauncherPath() !== null,
     };
@@ -963,23 +1067,29 @@ function registerIpc(): void {
     }
     return res;
   });
-  // Add R2SD *itself* to Steam (Settings button). Uses the same hybrid path.
+  // Add Knarr *itself* to Steam (Settings button). Uses the same hybrid path.
   ipcMain.handle('steam:addSelf', async () => {
     const self = selfLauncherPath();
     if (!self) {
       return { ok: false, error: 'This works from the packaged app (installed .exe / AppImage / .app), not a dev run.' };
     }
-    const res = await steam.addNonSteamGameSmart(self, 'RomM2SteamDeck', { tags: ['RomM'] });
-    // Live-configure via SteamClient: a clean name + the overlay-strip Launch
-    // Option (so it sticks in Game Mode / across Cloud — no restart, no revert).
-    if (res.ok && process.platform === 'linux') {
-      const live = await configureShortcutLive(self, {
-        name: 'RomM2SteamDeck',
+    const res = await steam.addNonSteamGameSmart(self, brand.APP_NAME, { tags: ['RomM'] });
+    if (!res.ok) return res;
+    const art = selfArtwork();
+    // Live-configure via SteamClient: a clean name, the overlay-strip Launch
+    // Option (so it sticks in Game Mode / across Cloud — no restart, no revert)
+    // and Knarr's artwork.
+    let live: LiveResult = {};
+    if (process.platform === 'linux') {
+      live = await configureShortcutLive(self, {
+        name: brand.APP_NAME,
         launchOptions: steam.OVERLAY_STRIP_LAUNCH_OPTS,
+        artworkSet: selfArtworkLive(art),
       });
-      return { ...res, ...live };
     }
-    return res;
+    // No live bridge (Windows, or Steam closed): the artwork goes in as files instead
+    if (!live.artworkLive) live.artworkLive = writeSelfGridArtwork(self, art);
+    return { ...res, ...live };
   });
 
   ipcMain.handle('downloads:sync', (_e, platformId: number) => {
@@ -998,7 +1108,7 @@ function registerIpc(): void {
   });
 }
 
-/** r2sd-asset://covers/<file> → the covers cache directory, nothing else. */
+/** knarr-asset://covers/<file> → the covers cache directory, nothing else. */
 function registerAssetProtocol(): void {
   protocol.handle(ASSET_SCHEME, (request) => {
     const url = new URL(request.url);
@@ -1106,7 +1216,7 @@ function clearStaleSingletonLock(): void {
       // that happened to inherit the number.
       try {
         const comm = fs.readFileSync(`/proc/${pid}/comm`, 'utf8');
-        if (!comm.includes('romm2steamdeck')) alive = false;
+        if (!comm.includes(brand.WINDOW_CLASS) && !comm.includes(brand.LEGACY_WINDOW_CLASS)) alive = false;
       } catch { alive = false; }
     }
     if (alive) return;
@@ -1195,7 +1305,7 @@ if (handleCli()) {
     registerIpc();
 
     // Automated smoke test: verify startup then exit
-    if (process.env.R2SD_SMOKE) {
+    if (brand.env('SMOKE')) {
       console.log('SMOKE OK: app ready, ipc registered');
       app.quit();
       return;
@@ -1203,6 +1313,13 @@ if (handleCli()) {
 
     createWindow();
     scheduleUpdateCheck();
+    // After the window is up: a slow Steam check must not hold up startup
+    setTimeout(() => { repointLegacySteamShortcuts().catch((err) => console.error('Steam shortcut repoint:', err)); }, 4000);
+    // 3.0.0 rename: a 2.x "Run with Faugus" handler still runs the old AppImage
+    if (process.platform === 'linux') {
+      const self = selfLauncherPath();
+      if (self) { try { cli.migrateLegacyFileHandler(self); } catch (err) { console.error('File handler migration:', err); } }
+    }
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -1,3 +1,6 @@
+/* `hidden` always wins: a component's own display (flex, grid) must not show a hidden element */
+[hidden] { display: none !important; }
+
 :root {
   --bg: #0d0d0d;
   --bg-panel: #161616;
@@ -778,3 +781,7 @@ button.danger:hover { border-color: #f87171; }
 .detail-cloud-state.ok { color: #4ade80; }
 .detail-cloud-state.warn { color: var(--accent); }
 .detail-cloud-state.bad { color: #f87171; }
+
+/* Lucide icons (icons.js): sit on the text baseline inside buttons and labels */
+.icon { flex: none; vertical-align: -0.18em; }
+.icon-btn .icon { vertical-align: middle; display: block; margin: auto; }

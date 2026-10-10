@@ -256,6 +256,7 @@ App data lives in `%APPDATA%\knarr` (Windows) or `~/.config/knarr` (Linux/macOS)
 
 - **[RomM](https://github.com/rommapp/romm)** — the excellent ROM manager and API this app is built around.
 - **[Faugus Launcher](https://github.com/Faugus/faugus-launcher)** — the easy way to run Windows games on Linux; Knarr's Play button leans on it.
+- **[Lucide](https://lucide.dev)** (ISC) — the toolbar and button icons.
 - **[Ludusavi manifest](https://github.com/mtkennerly/ludusavi-manifest)** (MIT) and **[PCGamingWiki](https://www.pcgamingwiki.com/)** — the save-location data behind Windows cloud saves.
 - **[DeckRommSync-Standalone](https://github.com/PeriBluGaming/DeckRommSync-Standalone)** by PeriBluGaming — the original inspiration for this project.
 

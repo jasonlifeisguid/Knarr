@@ -2,13 +2,14 @@
 
 const $ = (id) => document.getElementById(id);
 
-// Crisp inline-SVG icons (the unicode ⬇ rendered thin and line-like)
+// Card icons (Lucide, from icons.js; sized by the stylesheet)
 const ICON = {
-  download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>',
-  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>',
-  cancel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+  download: icon('download'),
+  trash: icon('trash'),
+  cancel: icon('close'),
+  play: icon('play', 16, { fill: true }),
 };
+hydrateIcons(); // the [data-icon] buttons in index.html
 
 const state = {
   config: null,        // PublicConfig incl. platform setups
@@ -99,7 +100,7 @@ function applyView() {
   const grid = $('game-grid');
   grid.classList.toggle('list-view', state.view === 'list');
   const btn = $('btn-view');
-  btn.innerHTML = state.view === 'list' ? '&#9638;' : '&#9776;'; // ▦ (to grid) / ☰ (to list)
+  btn.innerHTML = icon(state.view === 'list' ? 'view-grid' : 'view-list'); // the view a click switches to
   btn.title = state.view === 'list' ? 'Switch to grid view' : 'Switch to list view';
   // Same size, different layout: the resize observer won't notice
   if (vg.bottom) { vgMeasure(); vgUpdate(true); }
@@ -256,7 +257,7 @@ function renderPlatforms() {
 
     const pin = document.createElement('span');
     pin.className = 'pin-btn' + (isPinned ? ' pinned' : '');
-    pin.textContent = isPinned ? '★' : '☆';
+    pin.innerHTML = icon('star', 13, { fill: isPinned });
     pin.title = isPinned ? 'Unpin platform' : 'Pin to top';
     pin.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -585,7 +586,7 @@ function showContextMenu(e, rom) {
     item('Cancel download', () => window.knarr.cancelDownload(rom.id), true);
   } else if (downloaded) {
     if (setup.autoExtract) {
-      item('▶ Play', () => playGame(rom));
+      item('Play', () => playGame(rom));
       item('Choose executable…', () => openExePicker(rom));
       item('Add to Steam / Shortcut…', () => openExePicker(rom));
     }
@@ -652,7 +653,7 @@ function buildCard(rom) {
   const ratingEl = document.createElement('span');
   ratingEl.className = 'list-rating';
   const rating = romRating(rom);
-  if (rating) ratingEl.textContent = `★ ${Math.round(rating)}`;
+  if (rating) ratingEl.innerHTML = `${icon('star', 11, { fill: true })} ${Math.round(Number(rating))}`;
   const statusEl = document.createElement('span');
   statusEl.className = 'list-status';
   if (state.downloads.has(rom.id)) statusEl.textContent = 'Installed';
@@ -1025,7 +1026,7 @@ function renderQueueBar() {
     }
     const cancel = document.createElement('button');
     cancel.className = 'card-action-btn danger';
-    cancel.textContent = '✕';
+    cancel.innerHTML = icon('close');
     cancel.title = q.status === 'queued' ? 'Remove from queue' : 'Cancel';
     cancel.addEventListener('click', () => window.knarr.cancelDownload(q.romId));
     row.appendChild(cancel);
@@ -1117,7 +1118,7 @@ function refreshDetailActions() {
   shortcutBtn.hidden = !(record && setup.autoExtract && !inQueue);
   playBtn.hidden = !(record && setup.autoExtract && !inQueue);
   $('btn-folders').hidden = !(record && record.filePath && !inQueue);
-  playBtn.textContent = record && record.defaultExe ? '▶ Play' : '▶ Play…';
+  playBtn.innerHTML = icon('play') + (record && record.defaultExe ? ' Play' : ' Play…');
   // What Play actually runs — and a way back to the picker when it's the wrong exe
   const exeRow = $('detail-exe-row');
   const showExe = Boolean(record && record.defaultExe && setup.autoExtract && !inQueue);
@@ -1326,7 +1327,7 @@ async function openExePicker(rom) {
     if (isDefault) {
       const tag = document.createElement('span');
       tag.className = 'exe-default-tag';
-      tag.textContent = '★ default';
+      tag.innerHTML = `${icon('star', 11, { fill: true })} default`;
       label.appendChild(tag);
     }
     $('exe-list').appendChild(label);
@@ -1732,7 +1733,7 @@ function buildPlatformRows() {
     folderInput.addEventListener('input', markDirty);
     const folderBrowse = document.createElement('button');
     folderBrowse.className = 'icon-btn';
-    folderBrowse.innerHTML = '&#128193;';
+    folderBrowse.innerHTML = icon('folder');
     folderBrowse.title = 'Browse';
     folderBrowse.addEventListener('click', async () => {
       const picked = await window.knarr.pickFolder(`Folder for ${p.name}`);
@@ -1756,7 +1757,7 @@ function buildPlatformRows() {
       inp.addEventListener('input', markDirty);
       const browse = document.createElement('button');
       browse.className = 'icon-btn';
-      browse.innerHTML = '&#128193;';
+      browse.innerHTML = icon('folder');
       browse.title = 'Browse';
       browse.addEventListener('click', async () => {
         const picked = await window.knarr.pickFolder(`Install path for ${p.name}`);
@@ -1764,7 +1765,7 @@ function buildPlatformRows() {
       });
       const remove = document.createElement('button');
       remove.className = 'icon-btn';
-      remove.innerHTML = '&#10005;';
+      remove.innerHTML = icon('close');
       remove.title = 'Remove this path';
       remove.addEventListener('click', () => { r.remove(); markDirty(); });
       r.append(inp, browse, remove);
@@ -2428,7 +2429,7 @@ const SORT_DEFAULT_DIR = { name: 'asc', added: 'desc', size: 'desc', year: 'desc
 
 function updateSortDirButton() {
   const btn = $('btn-sortdir');
-  btn.innerHTML = state.sortDir === 'asc' ? '&#9650;' : '&#9660;'; // ▲ / ▼
+  btn.innerHTML = icon(state.sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
   btn.title = state.sortDir === 'asc' ? 'Ascending (click for descending)' : 'Descending (click for ascending)';
 }
 
@@ -2571,7 +2572,7 @@ document.addEventListener('keydown', (e) => {
 $('dl-sb-toggle').addEventListener('click', () => {
   const list = $('dl-sb-list');
   list.hidden = !list.hidden;
-  $('dl-sb-toggle').innerHTML = list.hidden ? '&#9650;' : '&#9660;';
+  $('dl-sb-toggle').innerHTML = icon(list.hidden ? 'chevron-up' : 'chevron-down');
   $('dl-sb-toggle').title = list.hidden ? 'Show queue' : 'Hide queue';
 });
 

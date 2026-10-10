@@ -43,7 +43,19 @@ export function isLegacyLauncher(exe: string): boolean {
 export interface DirFs {
   existsSync(p: string): boolean;
   renameSync(from: string, to: string): void;
+  readdirSync(p: string): string[];
+  rmSync(p: string, opts: { force: boolean }): void;
+  rmdirSync(p: string): void;
+  writeFileSync(p: string, data: string): void;
 }
+
+/**
+ * Files that can be in the new folder before any settings are: the AppImage launcher writes
+ * `eulaAccepted` there before the app starts (electron-builder's licence check, keyed by the app
+ * name), and a run that stopped early leaves Chromium's single-instance lock behind. A folder with
+ * only these holds no settings yet.
+ */
+const BOOTSTRAP_FILES = new Set(['eulaAccepted', 'SingletonLock', 'SingletonSocket', 'SingletonCookie']);
 
 /**
  * Move the 2.x settings folder to its new name, whole: on Windows the key that decrypts the saved
@@ -54,9 +66,19 @@ export interface DirFs {
 export function migrateUserDataDir(appData: string, fsi: DirFs = fs): { dir: string; moved: boolean; error?: string } {
   const dir = path.join(appData, USER_DATA_DIR);
   const legacy = path.join(appData, LEGACY_USER_DATA_DIR);
-  if (fsi.existsSync(dir) || !fsi.existsSync(legacy)) return { dir, moved: false };
+  if (!fsi.existsSync(legacy)) return { dir, moved: false };
+  let hadEula = false;
   try {
+    if (fsi.existsSync(dir)) {
+      const entries = fsi.readdirSync(dir);
+      if (entries.some((e) => !BOOTSTRAP_FILES.has(e))) return { dir, moved: false }; // real settings: never touched
+      // Only launcher/lock files: clear them so the 2.x folder can take the name
+      hadEula = entries.includes('eulaAccepted');
+      for (const e of entries) fsi.rmSync(path.join(dir, e), { force: true });
+      fsi.rmdirSync(dir);
+    }
     fsi.renameSync(legacy, dir);
+    if (hadEula) fsi.writeFileSync(path.join(dir, 'eulaAccepted'), ''); // or the licence prompt returns
     return { dir, moved: true };
   } catch (err) {
     return { dir: legacy, moved: false, error: err instanceof Error ? err.message : String(err) };

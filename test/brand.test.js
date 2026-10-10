@@ -62,15 +62,34 @@ test('migrateUserDataDir: fresh install, and an existing knarr folder is never o
   assert.deepEqual(brand.migrateUserDataDir(fresh), { dir: path.join(fresh, 'knarr'), moved: false });
   const both = tmpAppData();
   fs.mkdirSync(path.join(both, 'knarr'));
+  fs.writeFileSync(path.join(both, 'knarr', 'config.json'), '{"theme":"knarr"}');
   fs.mkdirSync(path.join(both, brand.LEGACY_USER_DATA_DIR));
   assert.deepEqual(brand.migrateUserDataDir(both), { dir: path.join(both, 'knarr'), moved: false });
   assert.ok(fs.existsSync(path.join(both, brand.LEGACY_USER_DATA_DIR)), 'old folder left alone');
+});
+
+test('migrateUserDataDir: the AppImage launcher\'s eulaAccepted (and stale locks) do not block the move', () => {
+  const appData = tmpAppData();
+  const dir = path.join(appData, 'knarr');
+  const legacy = path.join(appData, brand.LEGACY_USER_DATA_DIR);
+  fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(dir, 'eulaAccepted'), '');
+  fs.symlinkSync('otherhost-123', path.join(dir, 'SingletonLock')); // dangling, as Chromium leaves it
+  fs.mkdirSync(legacy);
+  fs.writeFileSync(path.join(legacy, 'config.json'), '{"theme":"oled-limited"}');
+  const res = brand.migrateUserDataDir(appData);
+  assert.deepEqual(res, { dir, moved: true });
+  assert.equal(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'), '{"theme":"oled-limited"}');
+  assert.ok(fs.existsSync(path.join(dir, 'eulaAccepted')), 'licence acceptance kept');
+  assert.equal(fs.existsSync(path.join(dir, 'SingletonLock')), false);
+  assert.equal(fs.existsSync(legacy), false);
 });
 
 test('migrateUserDataDir: a failed move keeps using the 2.x folder', () => {
   const fakeFs = {
     existsSync: (p) => p.endsWith(brand.LEGACY_USER_DATA_DIR),
     renameSync: () => { throw new Error('EPERM: operation not permitted'); },
+    readdirSync: () => [], rmSync: () => {}, rmdirSync: () => {}, writeFileSync: () => {},
   };
   const res = brand.migrateUserDataDir('/appdata', fakeFs);
   assert.equal(res.dir, path.join('/appdata', brand.LEGACY_USER_DATA_DIR));

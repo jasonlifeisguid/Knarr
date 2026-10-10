@@ -178,14 +178,15 @@
   <!-- Game folders: install dir + Windows-side (Proton prefix) user folders -->
   <div id="folders-modal" class="modal" hidden>
     <div class="modal-backdrop" id="folders-backdrop"></div>
-    <div class="modal-card exe-card">
-      <h2>Saves &amp; Folders</h2>
-      <p class="small muted mb-10" id="folders-game"></p>
-      <div id="folders-list" class="folders-list"></div>
-      <div class="modal-actions">
-        <span class="spacer"></span>
-        <button id="folders-close" class="secondary">Close</button>
+    <div class="modal-card folders-card">
+      <div class="settings-head">
+        <div>
+          <h2>Saves &amp; Folders</h2>
+          <p class="small muted" id="folders-game"></p>
+        </div>
+        <button id="folders-close" class="icon-btn" title="Close"><span data-icon="close"></span></button>
       </div>
+      <div id="folders-list" class="folders-list"></div>
     </div>
   </div>
 
@@ -279,99 +280,110 @@
   <div id="settings-modal" class="modal" hidden>
     <div class="modal-backdrop"></div>
     <div class="modal-card settings-card">
-      <h2>Settings <span id="cfg-version" class="small muted"></span></h2>
-      <label>RomM Server URL
-        <input id="cfg-url" type="text" placeholder="https://romm.example.com" autocomplete="off">
-      </label>
-      <label>Username
-        <input id="cfg-username" type="text" autocomplete="off">
-      </label>
-      <label>Password
-        <input id="cfg-password" type="password" placeholder="(unchanged)" autocomplete="off">
-      </label>
-      <div id="cfg-test-result" class="small"></div>
-
-      <div class="modal-actions">
-        <button id="btn-test" class="secondary">Test Connection</button>
-        <span class="spacer"></span>
-        <button id="btn-close-settings" class="secondary">Close</button>
-        <button id="btn-save" class="primary">Save</button>
+      <div class="settings-head">
+        <h2>Settings <span id="cfg-version" class="small muted"></span></h2>
+        <button id="btn-close-settings" class="icon-btn" title="Close"><span data-icon="close"></span></button>
       </div>
 
-      <div class="settings-section">
-        <span class="settings-section-label">Display</span>
-        <div class="settings-row">
-          <span class="settings-row-label">UI scale</span>
-          <div id="cfg-uiscale" class="dropdown" data-value="auto" title="Scale the whole interface (Ctrl + / Ctrl - / Ctrl 0)">
-            <button type="button" class="dropdown-trigger"><span class="dropdown-label">Auto</span><span class="dropdown-caret">&#9662;</span></button>
-            <div class="dropdown-menu" hidden></div>
+      <!-- RomM server: one line while it works, the form when changing it (or when it doesn't) -->
+      <section class="settings-server">
+        <div class="server-summary" id="cfg-server-summary">
+          <span class="server-dot" id="cfg-server-dot"></span>
+          <span class="server-text" id="cfg-server-text"></span>
+          <button id="btn-server-edit" class="secondary settings-row-btn">Change&hellip;</button>
+        </div>
+        <div class="server-form" id="cfg-server-form" hidden>
+          <label class="server-url">RomM Server URL
+            <input id="cfg-url" type="text" placeholder="https://romm.example.com" autocomplete="off">
+          </label>
+          <div class="server-login">
+            <label>Username
+              <input id="cfg-username" type="text" autocomplete="off">
+            </label>
+            <label>Password
+              <input id="cfg-password" type="password" placeholder="(unchanged)" autocomplete="off">
+            </label>
           </div>
-          <span id="cfg-uiscale-hint" class="small muted"></span>
-        </div>
-        <div class="settings-row" id="cfg-faugus-row" hidden>
-          <span class="settings-row-label">Faugus</span>
-          <div id="cfg-faugus" class="dropdown" data-value="auto" title="Play Windows games through Faugus Launcher (Linux)">
-            <button type="button" class="dropdown-trigger"><span class="dropdown-label">Auto</span><span class="dropdown-caret">&#9662;</span></button>
-            <div class="dropdown-menu" hidden></div>
+          <div id="cfg-test-result" class="small"></div>
+          <div class="modal-actions">
+            <button id="btn-test" class="secondary">Test Connection</button>
+            <span class="spacer"></span>
+            <button id="btn-server-cancel" class="secondary">Cancel</button>
+            <button id="btn-save" class="primary">Save</button>
           </div>
-          <span id="cfg-faugus-hint" class="small muted"></span>
         </div>
-        <div class="settings-row" id="cfg-filehandler-row" hidden>
-          <span class="settings-row-label">Any .exe</span>
-          <button id="btn-filehandler" class="secondary settings-row-btn">Add to file manager</button>
-          <span id="cfg-filehandler-hint" class="small muted"></span>
-        </div>
-        <div class="settings-row" id="cfg-faugusprefix-row" hidden>
-          <span class="settings-row-label">Prefix</span>
-          <div id="cfg-faugusprefix" class="dropdown" data-value="per-game" title="Where Faugus runs each game: its own prefix (saves isolated, listed in Faugus) or the shared default prefix">
-            <button type="button" class="dropdown-trigger"><span class="dropdown-label">Per game</span><span class="dropdown-caret">&#9662;</span></button>
-            <div class="dropdown-menu" hidden></div>
-          </div>
-          <span id="cfg-faugusprefix-hint" class="small muted"></span>
-        </div>
-        <div class="settings-row" id="cfg-cloud-row" hidden>
-          <span class="settings-row-label">Cloud saves</span>
-          <div id="cfg-cloud" class="dropdown" data-value="off" title="Sync each game's saves with your RomM account around Play">
-            <button type="button" class="dropdown-trigger"><span class="dropdown-label">Off</span><span class="dropdown-caret">&#9662;</span></button>
-            <div class="dropdown-menu" hidden></div>
-          </div>
-          <span id="cfg-cloud-hint" class="small muted"></span>
-        </div>
-        <div class="settings-row" id="cfg-playworkspace-row" hidden>
-          <span class="settings-row-label">On Play</span>
-          <div id="cfg-playworkspace" class="dropdown" data-value="off" title="Hyprland: where a game launched from Play goes">
-            <button type="button" class="dropdown-trigger"><span class="dropdown-label">Leave to Hyprland</span><span class="dropdown-caret">&#9662;</span></button>
-            <div class="dropdown-menu" hidden></div>
-          </div>
-          <span id="cfg-playworkspace-hint" class="small muted"></span>
-        </div>
-        <div class="settings-row" id="cfg-playwindow-row">
-          <span class="settings-row-label">On Play</span>
-          <div id="cfg-playwindow" class="dropdown" data-value="minimize" title="What Knarr's window does while a game launched from Play runs (controller input is ignored either way)">
-            <button type="button" class="dropdown-trigger"><span class="dropdown-label">Minimize Knarr</span><span class="dropdown-caret">&#9662;</span></button>
-            <div class="dropdown-menu" hidden></div>
-          </div>
-          <span id="cfg-playwindow-hint" class="small muted"></span>
-        </div>
-        <div class="settings-row" id="cfg-updates-row">
-          <span class="settings-row-label">Updates</span>
-          <div id="cfg-updates" class="dropdown" data-value="auto" title="Check GitHub for a newer release on startup (never installs anything)">
-            <button type="button" class="dropdown-trigger"><span class="dropdown-label">Auto</span><span class="dropdown-caret">&#9662;</span></button>
-            <div class="dropdown-menu" hidden></div>
-          </div>
-          <button id="btn-check-updates" class="secondary settings-row-btn">Check now</button>
-          <span id="cfg-updates-hint" class="small muted"></span>
-        </div>
-      </div>
+      </section>
 
-      <div class="settings-section">
-        <span class="settings-section-label">Manage</span>
-        <div class="settings-utils">
-          <button id="btn-platforms" class="secondary">Platform Folders&hellip;</button>
-          <button id="btn-clear-cache" class="secondary">Clear Cache</button>
-          <button id="btn-add-self-steam" class="secondary" hidden>Add Knarr to Steam</button>
-          <button id="btn-quit" class="secondary">Quit Knarr</button>
-        </div>
+      <!-- Everything below saves as soon as it changes -->
+      <div class="settings-columns">
+          <section class="settings-section">
+            <h3 class="settings-section-label">Playing games</h3>
+          <div class="settings-row" id="cfg-faugus-row" hidden>
+            <span class="settings-row-label">Faugus</span>
+            <div class="settings-ctl"><div id="cfg-faugus" class="dropdown" data-value="auto" title="Play Windows games through Faugus Launcher (Linux)"><button type="button" class="dropdown-trigger"><span class="dropdown-label">Auto</span><span class="dropdown-caret">&#9662;</span></button><div class="dropdown-menu" hidden></div></div></div>
+            <span id="cfg-faugus-hint" class="settings-hint"></span>
+          </div>
+          <div class="settings-row" id="cfg-faugusprefix-row" hidden>
+            <span class="settings-row-label">Prefix</span>
+            <div class="settings-ctl"><div id="cfg-faugusprefix" class="dropdown" data-value="per-game" title="Where Faugus runs each game: its own prefix (saves isolated, listed in Faugus) or the shared default prefix"><button type="button" class="dropdown-trigger"><span class="dropdown-label">Per game</span><span class="dropdown-caret">&#9662;</span></button><div class="dropdown-menu" hidden></div></div></div>
+            <span id="cfg-faugusprefix-hint" class="settings-hint"></span>
+          </div>
+          <div class="settings-row" id="cfg-filehandler-row" hidden>
+            <span class="settings-row-label">Any .exe</span>
+            <div class="settings-ctl"><button id="btn-filehandler" class="secondary settings-row-btn">Add to file manager</button></div>
+            <span id="cfg-filehandler-hint" class="settings-hint"></span>
+          </div>
+          <div class="settings-row" id="cfg-playwindow-row">
+            <span class="settings-row-label">Knarr window</span>
+            <div class="settings-ctl"><div id="cfg-playwindow" class="dropdown" data-value="minimize" title="What Knarr's window does while a game launched from Play runs (controller input is ignored either way)"><button type="button" class="dropdown-trigger"><span class="dropdown-label">Minimize Knarr</span><span class="dropdown-caret">&#9662;</span></button><div class="dropdown-menu" hidden></div></div></div>
+            <span id="cfg-playwindow-hint" class="settings-hint"></span>
+          </div>
+          <div class="settings-row" id="cfg-playworkspace-row" hidden>
+            <span class="settings-row-label">Game window</span>
+            <div class="settings-ctl"><div id="cfg-playworkspace" class="dropdown" data-value="off" title="Hyprland: where a game launched from Play goes"><button type="button" class="dropdown-trigger"><span class="dropdown-label">Leave to Hyprland</span><span class="dropdown-caret">&#9662;</span></button><div class="dropdown-menu" hidden></div></div></div>
+            <span id="cfg-playworkspace-hint" class="settings-hint"></span>
+          </div>
+          </section>
+          <section class="settings-section">
+            <h3 class="settings-section-label">Library</h3>
+            <div class="settings-buttons">
+              <button id="btn-platforms" class="secondary">Platform Folders&hellip;</button>
+              <button id="btn-clear-cache" class="secondary" title="Forget the cached library and covers; your games are not touched">Clear Cache</button>
+            </div>
+          </section>
+          <section class="settings-section" id="cfg-saves-section">
+            <h3 class="settings-section-label">Saves</h3>
+          <div class="settings-row" id="cfg-cloud-row" hidden>
+            <span class="settings-row-label">Cloud saves</span>
+            <div class="settings-ctl"><div id="cfg-cloud" class="dropdown" data-value="off" title="Sync each game's saves with your RomM account around Play"><button type="button" class="dropdown-trigger"><span class="dropdown-label">Off</span><span class="dropdown-caret">&#9662;</span></button><div class="dropdown-menu" hidden></div></div></div>
+            <span id="cfg-cloud-hint" class="settings-hint"></span>
+          </div>
+          </section>
+          <section class="settings-section">
+            <h3 class="settings-section-label">Appearance</h3>
+          <div class="settings-row">
+            <span class="settings-row-label">Theme</span>
+            <div class="settings-ctl"><button id="btn-settings-theme" class="secondary settings-row-btn"><span id="cfg-theme-dot" class="theme-dot small-dot"></span><span id="cfg-theme-name">Theme</span></button></div>
+            <span id="cfg-theme-hint" class="settings-hint"></span>
+          </div>
+          <div class="settings-row">
+            <span class="settings-row-label">UI scale</span>
+            <div class="settings-ctl"><div id="cfg-uiscale" class="dropdown" data-value="auto" title="Scale the whole interface (Ctrl + / Ctrl - / Ctrl 0)"><button type="button" class="dropdown-trigger"><span class="dropdown-label">Auto</span><span class="dropdown-caret">&#9662;</span></button><div class="dropdown-menu" hidden></div></div></div>
+            <span id="cfg-uiscale-hint" class="settings-hint"></span>
+          </div>
+          </section>
+          <section class="settings-section">
+            <h3 class="settings-section-label">Knarr</h3>
+          <div class="settings-row" id="cfg-updates-row">
+            <span class="settings-row-label">Updates</span>
+            <div class="settings-ctl"><div id="cfg-updates" class="dropdown" data-value="auto" title="Check GitHub for a newer release on startup (never installs anything)"><button type="button" class="dropdown-trigger"><span class="dropdown-label">Auto</span><span class="dropdown-caret">&#9662;</span></button><div class="dropdown-menu" hidden></div></div><button id="btn-check-updates" class="secondary settings-row-btn">Check now</button></div>
+            <span id="cfg-updates-hint" class="settings-hint"></span>
+          </div>
+            <div class="settings-buttons">
+              <button id="btn-add-self-steam" class="secondary" hidden>Add Knarr to Steam</button>
+              <button id="btn-quit" class="secondary">Quit Knarr</button>
+            </div>
+          </section>
       </div>
     </div>
   </div>

@@ -1455,6 +1455,22 @@ async function addToSteam() {
 // the main process and are re-validated there on open.
 
 let foldersRom = null;
+/** "today 2:42 PM", "yesterday 9:10 AM", or the date for anything older. */
+function formatWhen(ts) {
+  const d = new Date(ts);
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(new Date()) - day(d)) / 86400000);
+  if (diff === 0) return `today ${time}`;
+  if (diff === 1) return `yesterday ${time}`;
+  return `${d.toLocaleDateString()} ${time}`;
+}
+
+/**
+ * Saves & Folders: per prefix, a "Saves" card (backup on this device, then RomM cloud), then a
+ * "Folders" card (the install folder, then each prefix's Windows-side folders). Every
+ * button sits on the same three-column grid, so the dialog lines up top to bottom.
+ */
 async function openFoldersModal(rom) {
   foldersRom = rom;
   $('folders-game').textContent = rom.name || rom.fs_name;
@@ -1465,115 +1481,130 @@ async function openFoldersModal(rom) {
   const info = await window.knarr.gameFolders(rom.id);
   if (foldersRom?.id !== rom.id) return;
   list.innerHTML = '';
-  const addGroup = (label, root, items, saveActions = false) => {
-    const g = document.createElement('div');
-    const l = document.createElement('div'); l.className = 'folders-group-label'; l.textContent = label;
-    g.appendChild(l);
-    if (root) { const r = document.createElement('div'); r.className = 'folders-group-root'; r.textContent = root; r.title = root; g.appendChild(r); }
-    const row = document.createElement('div'); row.className = 'folders-group-items';
-    for (const it of items) {
-      const b = document.createElement('button');
-      b.className = 'secondary folder-btn';
-      b.textContent = it.label;
-      b.title = it.path;
-      b.addEventListener('click', async () => {
-        const res = await window.knarr.openGameFolder(rom.id, it.path);
-        if (res.error) toast(res.error, 'error');
-      });
-      row.appendChild(b);
-    }
-    g.appendChild(row);
-    if (saveActions) {
-      const actions = document.createElement('div');
-      actions.className = 'folders-group-actions';
-      const mk = (label, title, fn) => {
-        const b = document.createElement('button');
-        b.className = 'secondary'; b.textContent = label; b.title = title;
-        b.addEventListener('click', async () => {
-          b.disabled = true;
-          try { await fn(); } finally { b.disabled = false; }
-        });
-        actions.appendChild(b);
-      };
-      mk('Back up saves…', 'Zip this prefix\'s Documents / Saved Games / AppData to a folder you choose', async () => {
-        const res = await window.knarr.backupSaves(rom.id, root);
-        if (res.cancelled) return;
-        if (res.error) toast(res.error, 'error');
-        else toast(`Saves backed up: ${res.file}`, 'success');
-      });
-      mk('Restore saves…', 'Extract a saves backup (.zip) into this prefix, overwriting same-named files', async () => {
-        const res = await window.knarr.restoreSaves(rom.id, root);
-        if (res.cancelled) return;
-        if (res.error) toast(res.error, 'error');
-        else toast(`Saves restored (${res.folders.join(', ')})${res.skipped ? ` — ${res.skipped} files outside this game's save locations left out` : ''}`, 'success');
-      });
-      mk('What syncs…', 'The files a backup or cloud sync would include, and what is excluded as config', () => openSyncsModal(rom, root));
-      g.appendChild(actions);
 
-      // Cloud (RomM) row: status + upload/download
-      const cloudRow = document.createElement('div');
-      cloudRow.className = 'folders-cloud';
-      cloudRow.textContent = 'RomM: checking…';
-      g.appendChild(cloudRow);
-      const cloudActions = document.createElement('div');
-      cloudActions.className = 'folders-group-actions';
-      const cmk = (label, title, fn) => {
-        const b = document.createElement('button');
-        b.className = 'secondary'; b.textContent = label; b.title = title;
-        b.addEventListener('click', async () => { b.disabled = true; try { await fn(); } finally { b.disabled = false; } });
-        cloudActions.appendChild(b);
-        return b;
-      };
-      const refreshCloud = async () => {
-        const st = await window.knarr.cloudStatus(rom.id, root);
-        if (foldersRom?.id !== rom.id) return;
-        cloudRow.innerHTML = '';
-        if (!st.ok) { cloudRow.textContent = `RomM: ${st.error}`; return; }
-        const label = {
-          nothing: ['No saves here or on RomM', ''], 'remote-only': ['RomM has saves, nothing local yet', 'warn'],
-          'local-only': ['Not on RomM yet', 'warn'], 'in-sync': ['In sync with RomM', 'ok'],
-          'local-newer': ['Local is newer than RomM', 'warn'], 'remote-newer': ['RomM is newer than local', 'warn'],
-          conflict: ['Both changed since last sync — choose', 'bad'],
-        }[st.state] || [st.state, ''];
-        const s = document.createElement('span'); s.className = 'state ' + label[1]; s.textContent = label[0];
-        cloudRow.appendChild(s);
-        if (st.remote) {
-          const when = new Date(st.remote.updatedAt);
-          cloudRow.append(` · latest on RomM ${when.toLocaleString()}${st.remote.fromDevice ? ` from ${st.remote.fromDevice}` : ''} (${formatSize(st.remote.size)}, ${st.remote.versions} version${st.remote.versions === 1 ? '' : 's'})`);
-        }
-        if (st.local) cloudRow.append(` · local ${st.local.files} files, ${formatSize(st.local.bytes)}${st.local.excludedConfig ? `, ${st.local.excludedConfig} config files excluded` : ''}`);
-        if (st.unscoped) cloudRow.append(' · no save locations known yet (What syncs…)');
-        else if (!st.own) cloudRow.append(' · shared prefix: manual only');
-      };
-      cmk('Upload to RomM', 'Zip this prefix\'s saves and store them in your RomM account (keeps the last 5 versions)', async () => {
-        const res = await window.knarr.cloudUpload(rom.id, root);
-        if (res.error) toast(res.error, 'error'); else toast(`Uploaded ${res.files} files (${formatSize(res.bytes)}) to RomM`, 'success');
-        await refreshCloud();
-      });
-      cmk('Download from RomM', 'Restore the latest RomM save into this prefix', async () => {
-        const res = await window.knarr.cloudDownload(rom.id, root);
-        if (res.cancelled) return;
-        if (res.error) toast(res.error, 'error'); else toast('Saves restored from RomM', 'success');
-        await refreshCloud();
-      });
-      cmk('History…', 'The versions RomM keeps (the last 5) — restore an older one', () => openHistoryModal(rom, root, refreshCloud));
-      g.appendChild(cloudActions);
-      refreshCloud();
-    }
-    list.appendChild(g);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+  const card = (title, sub) => {
+    const c = el('section', 'folders-section');
+    const h = el('h3', 'folders-section-label', title);
+    if (sub) h.appendChild(el('span', 'folders-section-sub', sub));
+    c.appendChild(h);
+    list.appendChild(c);
+    return c;
   };
-  if (info.gameFolder) addGroup('Game', null, [{ label: 'Game folder (install)', path: info.gameFolder }]);
-  for (const p of info.prefixes) if (p.folders.length) addGroup(p.label, p.root, p.folders, true);
-  if (!info.gameFolder && !info.prefixes.length) {
+  /** A caption line (label, optional path) and a grid of buttons under it. */
+  const block = (parent, caption, path) => {
+    if (caption) {
+      const cap = el('div', 'folders-caption', caption);
+      if (path) { const p = el('span', 'folders-path', path); p.title = path; cap.appendChild(p); }
+      parent.appendChild(cap);
+    }
+    const grid = el('div', 'folders-grid');
+    parent.appendChild(grid);
+    return grid;
+  };
+  const button = (grid, label, title, fn, iconName) => {
+    const b = el('button', 'secondary folders-btn');
+    if (iconName) b.innerHTML = icon(iconName, 15);
+    b.appendChild(el('span', '', label));
+    b.title = title;
+    b.addEventListener('click', async () => { b.disabled = true; try { await fn(); } finally { b.disabled = false; } });
+    grid.appendChild(b);
+    return b;
+  };
+  const openFolder = (path) => async () => {
+    const res = await window.knarr.openGameFolder(rom.id, path);
+    if (res.error) toast(res.error, 'error');
+  };
+
+  const prefixes = info.prefixes.filter((p) => p.folders.length);
+  if (!info.gameFolder && !prefixes.length) {
     list.innerHTML = '<p class="folders-empty">No folders found yet.</p>';
-  } else if (!info.prefixes.length) {
-    const hint = document.createElement('p');
-    hint.className = 'folders-empty';
-    hint.textContent = info.exe
-      ? 'No Windows-side folders yet — they appear after the game has been run once (through Faugus or Steam).'
-      : 'Pick a default executable (Play… or Add to Steam…) to locate this game\'s Windows-side save and config folders.';
-    list.appendChild(hint);
+    return;
   }
+
+  // ── Folders ──
+  const folders = card('Folders');
+  if (info.gameFolder) {
+    button(block(folders, 'Game', info.gameFolder), 'Install folder', info.gameFolder, openFolder(info.gameFolder), 'folder');
+  }
+  for (const p of prefixes) {
+    const grid = block(folders, p.label, p.root);
+    for (const it of p.folders) button(grid, it.label, it.path, openFolder(it.path), 'folder');
+  }
+  if (!prefixes.length) {
+    folders.appendChild(el('p', 'folders-empty', info.exe
+      ? 'No Windows-side folders yet — they appear after the game has been run once (through Faugus or Steam).'
+      : 'Pick a default executable (Play… or Add to Steam…) to locate this game\'s Windows-side save and config folders.'));
+    return;
+  }
+
+  // ── Saves, per prefix ──
+  for (const p of prefixes) {
+    const root = p.root;
+    const saves = card('Saves', prefixes.length > 1 ? p.label : '');
+    const local = block(saves, 'Backup on this device');
+    button(local, 'Back up…', 'Zip this prefix\'s Documents / Saved Games / AppData to a folder you choose', async () => {
+      const res = await window.knarr.backupSaves(rom.id, root);
+      if (res.cancelled) return;
+      if (res.error) toast(res.error, 'error');
+      else toast(`Saves backed up: ${res.file}`, 'success');
+    }, 'archive');
+    button(local, 'Restore…', 'Extract a saves backup (.zip) into this prefix, overwriting same-named files', async () => {
+      const res = await window.knarr.restoreSaves(rom.id, root);
+      if (res.cancelled) return;
+      if (res.error) toast(res.error, 'error');
+      else toast(`Saves restored (${res.folders.join(', ')})${res.skipped ? ` — ${res.skipped} files outside this game's save locations left out` : ''}`, 'success');
+    }, 'archive-restore');
+    button(local, 'What syncs…', 'The files a backup or cloud sync would include, and what is excluded as config', () => openSyncsModal(rom, root), 'list-checks');
+
+    // RomM cloud: a status block, then the three actions
+    saves.appendChild(el('div', 'folders-caption', 'RomM cloud'));
+    const status = el('div', 'cloud-status');
+    status.appendChild(el('div', 'cloud-status-line', 'Checking RomM…'));
+    saves.appendChild(status);
+    const cloud = el('div', 'folders-grid');
+    saves.appendChild(cloud);
+    const refreshCloud = async () => {
+      const st = await window.knarr.cloudStatus(rom.id, root);
+      if (foldersRom?.id !== rom.id) return;
+      status.innerHTML = '';
+      if (!st.ok) { status.appendChild(el('div', 'cloud-status-line', `RomM: ${st.error}`)); return; }
+      const [text, tone] = {
+        nothing: ['No saves here or on RomM', ''], 'remote-only': ['RomM has saves, nothing local yet', 'warn'],
+        'local-only': ['Not on RomM yet', 'warn'], 'in-sync': ['In sync with RomM', 'ok'],
+        'local-newer': ['This device is newer than RomM', 'warn'], 'remote-newer': ['RomM is newer than this device', 'warn'],
+        conflict: ['Both changed since the last sync — choose', 'bad'],
+      }[st.state] || [st.state, ''];
+      status.className = `cloud-status ${tone}`;
+      status.appendChild(el('div', `cloud-badge ${tone}`, text));
+      if (st.remote) {
+        status.appendChild(el('div', 'cloud-status-line',
+          `RomM: ${st.remote.versions} version${st.remote.versions === 1 ? '' : 's'} · latest ${formatWhen(st.remote.updatedAt)}` +
+          `${st.remote.fromDevice ? ` from ${st.remote.fromDevice}` : ''} · ${formatSize(st.remote.size)}`));
+      }
+      if (st.local) {
+        status.appendChild(el('div', 'cloud-status-line',
+          `This device: ${st.local.files} files · ${formatSize(st.local.bytes)}` +
+          `${st.local.excludedConfig ? ` · ${st.local.excludedConfig} config files left out` : ''}`));
+      }
+      if (st.unscoped) status.appendChild(el('div', 'cloud-status-line', 'No save locations known yet — see What syncs…'));
+      else if (!st.own) status.appendChild(el('div', 'cloud-status-line', 'Shared prefix: upload and download by hand only'));
+    };
+    button(cloud, 'Upload', 'Zip this prefix\'s saves and store them in your RomM account (keeps the last 5 versions)', async () => {
+      const res = await window.knarr.cloudUpload(rom.id, root);
+      if (res.error) toast(res.error, 'error'); else toast(`Uploaded ${res.files} files (${formatSize(res.bytes)}) to RomM`, 'success');
+      await refreshCloud();
+    }, 'cloud-upload');
+    button(cloud, 'Download', 'Restore the latest RomM save into this prefix', async () => {
+      const res = await window.knarr.cloudDownload(rom.id, root);
+      if (res.cancelled) return;
+      if (res.error) toast(res.error, 'error'); else toast('Saves restored from RomM', 'success');
+      await refreshCloud();
+    }, 'cloud-download');
+    button(cloud, 'History…', 'The versions RomM keeps (the last 5) — restore an older one', () => openHistoryModal(rom, root, refreshCloud), 'history');
+    refreshCloud();
+  }
+  list.appendChild(folders); // saves first: they're what this dialog is opened for most
 }
 function closeFoldersModal() { $('folders-modal').hidden = true; foldersRom = null; }
 
@@ -1970,8 +2001,49 @@ async function renderFaugusSetting(cfg) {
     : (cfg.faugus === 'off' ? `Installed (${how}), not used` : `Installed (${how}) — Play runs Windows games through it`);
 }
 
+/** The server card: one line while the saved login works; the form when changing it, or when it doesn't. */
+function showServerForm(show) {
+  $('cfg-server-form').hidden = !show;
+  $('cfg-server-summary').hidden = show;
+}
+
+/** Check the saved login (a blank password means "the saved one") and show the result on the line. */
+async function checkSavedServer(cfg) {
+  const dot = $('cfg-server-dot');
+  const text = $('cfg-server-text');
+  let host = cfg.baseUrl;
+  try { host = new URL(cfg.baseUrl).host; } catch { /* shown as typed */ }
+  dot.className = 'server-dot';
+  text.textContent = `Checking ${host}…`;
+  const res = await window.knarr.testConnection({ baseUrl: cfg.baseUrl, username: cfg.username, password: '' });
+  if ($('settings-modal').hidden) return;
+  if (res.ok && res.loginChecked !== false) {
+    dot.className = 'server-dot ok';
+    text.textContent = `Connected to ${host} as ${cfg.username}`;
+    if (res.version) {
+      const v = document.createElement('span');
+      v.className = 'muted';
+      v.textContent = ` · RomM ${res.version}`;
+      text.appendChild(v);
+    }
+    return;
+  }
+  dot.className = 'server-dot bad';
+  text.textContent = `Can't sign in to ${host}`;
+  showServerForm(true); // the fix is in the form
+  $('cfg-test-result').className = 'small error';
+  $('cfg-test-result').textContent = res.error || 'Connection failed';
+}
+
+function renderThemeSetting() {
+  const t = THEMES.find((x) => x.id === state.theme) || THEMES[0];
+  $('cfg-theme-name').textContent = t.name;
+  $('cfg-theme-dot').style.background = t.dot;
+}
+
 async function openSettings() {
   const cfg = await window.knarr.getConfig();
+  renderThemeSetting();
   window.knarr.getUiScaleInfo().then(renderUiScale);
   renderFaugusSetting(cfg);
   renderUpdateSetting(cfg);
@@ -1991,7 +2063,12 @@ async function openSettings() {
   }
   // "Add Knarr to Steam" only makes sense when a Steam install is found.
   window.knarr.steamStatus().then((s) => { $('btn-add-self-steam').hidden = !s.found; });
+  // A working, saved server folds to one line; first run (or a password to re-enter) opens the form
+  const configured = Boolean(cfg.baseUrl && cfg.username && cfg.hasPassword && !cfg.passwordNeedsReentry);
+  $('btn-server-cancel').hidden = !configured;
+  showServerForm(!configured);
   $('settings-modal').hidden = false;
+  if (configured) checkSavedServer(cfg);
 }
 
 function closeSettings() {
@@ -2337,9 +2414,20 @@ $('btn-test').addEventListener('click', testConnection);
 $('btn-save').addEventListener('click', saveSettings);
 $('btn-clear-cache').addEventListener('click', async () => {
   await window.knarr.clearCache();
-  $('cfg-test-result').className = 'small success';
-  $('cfg-test-result').textContent = 'Cache cleared.';
+  toast('Cache cleared', 'success');
 });
+$('btn-server-edit').addEventListener('click', () => { showServerForm(true); $('cfg-url').focus(); });
+$('btn-server-cancel').addEventListener('click', async () => {
+  // Back to the saved values, folded
+  const cfg = await window.knarr.getConfig();
+  $('cfg-url').value = cfg.baseUrl;
+  $('cfg-username').value = cfg.username;
+  $('cfg-password').value = '';
+  $('cfg-test-result').textContent = '';
+  showServerForm(false);
+  checkSavedServer(cfg);
+});
+$('btn-settings-theme').addEventListener('click', () => { closeSettings(); renderThemeGrid(); $('theme-modal').hidden = false; });
 $('btn-quit').addEventListener('click', () => { window.knarr.quitApp(); });
 $('btn-filehandler').addEventListener('click', async () => {
   const btn = $('btn-filehandler');

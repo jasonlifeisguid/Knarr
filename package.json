@@ -68,7 +68,8 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "Knarr",
-      "artifactName": "Knarr-Setup-${version}.exe"
+      "artifactName": "Knarr-Setup-${version}.exe",
+      "license": "build/installer-license.txt"
     },
     "portable": {
       "artifactName": "Knarr-${version}-portable.exe"

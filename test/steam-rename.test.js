@@ -26,7 +26,8 @@ const read = () => steam.parseVdf(fs.readFileSync(shortcutsPath)).shortcuts;
 
 test('repointLegacyShortcuts moves a 2.x shortcut to Knarr in place, games untouched', async (t) => {
   if (await steam.isSteamRunning()) return t.skip('a Steam client is running here');
-  const old = steam.buildShortcutEntry('/home/deck/Applications/RomM2SteamDeck.appimage', 'RomM2SteamDeck', { tags: ['RomM'], overlayOff: true });
+  // Named after the file, as Steam names a shortcut added live (the Deck's real case)
+  const old = steam.buildShortcutEntry('/home/deck/Applications/RomM2SteamDeck.appimage', 'RomM2SteamDeck.AppImage', { tags: ['RomM'], overlayOff: true });
   old.LastPlayTime = 1700000000;
   const renamed = steam.buildShortcutEntry('/home/deck/Downloads/RomM2SteamDeck-2.2.30.AppImage', 'My Game Library');
   const game = steam.buildShortcutEntry('/games/Balls/balls.exe', 'Balls');
@@ -71,6 +72,16 @@ test('writeGridArtwork names files after the unsigned appid and keeps the user\'
   assert.equal(fs.readFileSync(path.join(grid, `${id}_hero.png`), 'utf8'), 'mine', 'existing artwork kept');
   steam.writeGridArtwork(configDir, appId, art, true);
   assert.equal(fs.readFileSync(path.join(grid, `${id}_hero.png`), 'utf8'), 'h', 'replace=true overwrites');
+});
+
+test('missingGridArtwork leaves out every kind the shortcut already has (png or jpg)', () => {
+  const appId = 777;
+  const grid = path.join(configDir, 'grid');
+  fs.mkdirSync(grid, { recursive: true });
+  fs.writeFileSync(path.join(grid, '777p.jpg'), 'user capsule');
+  fs.writeFileSync(path.join(grid, '777_logo.png'), 'user logo');
+  const art = { capsule: Buffer.from('c'), wide: Buffer.from('w'), hero: Buffer.from('h'), logo: Buffer.from('l') };
+  assert.deepEqual(Object.keys(steam.missingGridArtwork(configDir, appId, art)).sort(), ['hero', 'wide']);
 });
 
 test('configDirForShortcut finds the Steam user that owns a shortcut', () => {

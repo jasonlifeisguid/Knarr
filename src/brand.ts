@@ -35,6 +35,12 @@ export function isOwnAppImage(exe: string): boolean {
   return OWN_APPIMAGE_RE.test(exe);
 }
 
+/** A shortcut name the user didn't choose: "RomM2SteamDeck", or the file name Steam gives a
+ *  shortcut added live ("RomM2SteamDeck.AppImage"). These become "Knarr"; any other is kept. */
+export function isDefaultLegacyName(name: string): boolean {
+  return /^RomM2SteamDeck(?:\.appimage|\.exe)?$/i.test(name.trim());
+}
+
 /** A 2.x launcher (RomM2SteamDeck*.AppImage / RomM2SteamDeck.exe): a shortcut to repoint at Knarr. */
 export function isLegacyLauncher(exe: string): boolean {
   return LEGACY_LAUNCHER_RE.test(exe);

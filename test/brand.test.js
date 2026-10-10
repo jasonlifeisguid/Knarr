@@ -37,6 +37,13 @@ test('isLegacyLauncher: only 2.x RomM2SteamDeck launchers (AppImage or .exe)', (
   assert.ok(!brand.isLegacyLauncher('"/games/RomM2SteamDeck Fan Game/data/game.bin"'));
 });
 
+test('isDefaultLegacyName: the names 2.x shortcuts got without the user choosing', () => {
+  for (const n of ['RomM2SteamDeck', 'RomM2SteamDeck.AppImage', 'RomM2SteamDeck.appimage', 'RomM2SteamDeck.exe', ' RomM2SteamDeck ']) {
+    assert.ok(brand.isDefaultLegacyName(n), n);
+  }
+  for (const n of ['My Games', 'RomM2SteamDeck (Deck)', 'Knarr', '']) assert.ok(!brand.isDefaultLegacyName(n), n);
+});
+
 function tmpAppData() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'knarr-appdata-'));
 }

@@ -222,10 +222,12 @@ async function repointLegacySteamShortcuts(): Promise<void> {
       const ok = (await steamclient.setShortcutExe(sc.appId, self)).ok
         && (await steamclient.setShortcutStartDir(sc.appId, dir.endsWith(path.sep) ? dir : dir + path.sep)).ok;
       if (ok) {
-        if (sc.name === brand.LEGACY_APP_NAME) await steamclient.setShortcutName(sc.appId, brand.APP_NAME);
+        if (brand.isDefaultLegacyName(sc.name)) await steamclient.setShortcutName(sc.appId, brand.APP_NAME);
         if (brand.isOwnAppImage(self)) await steamclient.setLaunchOptions(sc.appId, steam.OVERLAY_STRIP_LAUNCH_OPTS);
-        if (!(await setArtworkLive(sc.appId, selfArtworkLive(art)))) {
-          try { steam.writeGridArtwork(sc.configDir, sc.appId, art); } catch { /* cosmetic */ }
+        const missing = steam.missingGridArtwork(sc.configDir, sc.appId, art); // never replace the user's own
+        const live = selfArtworkLive(missing);
+        if (live.length && !(await setArtworkLive(sc.appId, live))) {
+          try { steam.writeGridArtwork(sc.configDir, sc.appId, missing); } catch { /* cosmetic */ }
         }
       }
       all = all && ok;
@@ -1081,10 +1083,14 @@ function registerIpc(): void {
     // and Knarr's artwork.
     let live: LiveResult = {};
     if (process.platform === 'linux') {
+      const appId = steam.readShortcutAppId(self);
+      const configDir = steam.configDirForShortcut(self);
+      // Only artwork the shortcut doesn't have yet: a re-add must not undo the user's own
+      const missing = appId !== null && configDir ? steam.missingGridArtwork(configDir, appId, art) : art;
       live = await configureShortcutLive(self, {
         name: brand.APP_NAME,
         launchOptions: steam.OVERLAY_STRIP_LAUNCH_OPTS,
-        artworkSet: selfArtworkLive(art),
+        artworkSet: selfArtworkLive(missing),
       });
     }
     // No live bridge (Windows, or Steam closed): the artwork goes in as files instead

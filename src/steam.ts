@@ -355,6 +355,19 @@ export function writeGridArtwork(configDir: string, appId: number, art: GridArtw
   return out;
 }
 
+/** The part of `art` this shortcut has no file for yet: artwork the user set (SteamGridDB...) is
+ *  never replaced, live or by file. */
+export function missingGridArtwork(configDir: string, appId: number, art: GridArtwork): GridArtwork {
+  const grid = path.join(configDir, 'grid');
+  const id = appId >>> 0;
+  const out: GridArtwork = {};
+  for (const kind of Object.keys(GRID_FILES) as (keyof GridArtwork)[]) {
+    const has = ['.png', '.jpg'].some((ext) => fs.existsSync(path.join(grid, `${id}${GRID_FILES[kind].replace(/\.png$/, ext)}`)));
+    if (art[kind] && !has) out[kind] = art[kind];
+  }
+  return out;
+}
+
 /** The config folder of the Steam user that owns the shortcut whose Exe is `exePath`. */
 export function configDirForShortcut(exePath: string): string | null {
   const quoted = `"${exePath}"`;
@@ -393,7 +406,8 @@ export interface RepointResult { ok: boolean; repointed: LegacyShortcut[]; backu
 
 /**
  * Point every 2.x shortcut at `exePath`, in place: same entry and appid (so playtime and
- * artwork stay), new Exe and StartDir, and the name "Knarr" unless the user had renamed it.
+ * artwork stay), new Exe and StartDir, and the name "Knarr" unless the user had renamed it
+ * (brand.isDefaultLegacyName).
  * Like adding, this needs Steam closed; with Steam running it changes nothing and says so
  * (the caller can then try the live SteamClient path). Byte-safe, with a backup per file.
  */
@@ -421,7 +435,7 @@ export async function repointLegacyShortcuts(exePath: string): Promise<RepointRe
         const was: LegacyShortcut = { appId: (e.appid as number) >>> 0, exe: e.Exe, name: String(e.AppName ?? ''), configDir: u.configDir };
         e.Exe = quotedExe;
         e.StartDir = startDir;
-        if (e.AppName === brand.LEGACY_APP_NAME) e.AppName = brand.APP_NAME;
+        if (typeof e.AppName === 'string' && brand.isDefaultLegacyName(e.AppName)) e.AppName = brand.APP_NAME;
         if (brand.isOwnAppImage(quotedExe)) { e.AllowOverlay = 0; e.LaunchOptions = OVERLAY_STRIP_LAUNCH_OPTS; }
         repointed.push(was);
         changed = true;

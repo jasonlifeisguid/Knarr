@@ -1978,7 +1978,20 @@ function buildPlatformRows() {
       installList.style.display = check.checked ? '' : 'none';
     };
     applyMode();
-    check.addEventListener('change', () => { applyMode(); markDirty(); });
+    // The two modes have their own fields; switching shows the other one. Carry
+    // the path across when that one is empty, so ticking Extract doesn't look
+    // like it wiped the folder you just typed (and Save doesn't drop it).
+    check.addEventListener('change', () => {
+      const installs = [...installList.querySelectorAll('.pf-install')];
+      const firstInstall = installs.find((i) => i.value.trim());
+      if (check.checked && !firstInstall && folderInput.value.trim()) {
+        if (!installs.length) { installs.push(makeInstallRow('').querySelector('.pf-install')); installList.insertBefore(installs[0].parentElement, addPathBtn); }
+        installs[0].value = folderInput.value.trim();
+      }
+      if (!check.checked && !folderInput.value.trim() && firstInstall) folderInput.value = firstInstall.value.trim();
+      applyMode();
+      markDirty();
+    });
     extract.append(check, document.createTextNode('Extract'));
 
     row.append(name, paths, extract);

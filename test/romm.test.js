@@ -52,3 +52,14 @@ test('slimRom tolerates missing/odd fields', () => {
   const slim = slimRom({ id: '9', platform_id: '3', fs_name: 'x.bin', fs_size_bytes: null, metadatum: null, merged_screenshots: 'nope' });
   assert.deepEqual(slim, { id: 9, name: '', platform_id: 3, fs_name: 'x.bin', fs_size_bytes: 0 });
 });
+
+test('rommGamePage: the game page in the RomM web UI', () => {
+  const { rommGamePage } = require('../dist/romm.js');
+  assert.equal(rommGamePage('https://romm.example.com/api/', 42), 'https://romm.example.com/rom/42');
+  assert.equal(rommGamePage('http://192.168.1.5:8080', '7'), 'http://192.168.1.5:8080/rom/7');
+  assert.equal(rommGamePage('https://example.com/romm/', 3), 'https://example.com/romm/rom/3');
+  assert.equal(rommGamePage('', 42), '');
+  assert.equal(rommGamePage('javascript:alert(1)', 42), '');
+  assert.equal(rommGamePage('https://romm.example.com', 0), '');
+  assert.equal(rommGamePage('https://romm.example.com', '1/../x'), '');
+});

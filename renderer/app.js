@@ -1069,6 +1069,23 @@ async function deleteDownloadFor(rom) {
 
 // ── Game detail modal ───────────────────────────────────
 
+// Last row of the facts: the game's own page in RomM's web UI
+function addRommLink(container, rom) {
+  if (!rom.id) return;
+  const l = document.createElement('span');
+  l.className = 'fact-label';
+  l.textContent = 'RomM';
+  const v = document.createElement('span');
+  v.className = 'fact-value';
+  const btn = document.createElement('button');
+  btn.className = 'linkish romm-link';
+  btn.title = 'Open this game\'s page in RomM in your browser';
+  btn.innerHTML = `Open in RomM ${icon('external-link', 12)}`;
+  btn.addEventListener('click', () => window.knarr.openInRomm(rom.id));
+  v.append(btn);
+  container.append(l, v);
+}
+
 function addFact(container, label, value) {
   if (!value) return;
   const l = document.createElement('span');
@@ -1221,6 +1238,7 @@ function openDetail(rom) {
   addFact(facts, 'Players', md.player_count);
   addFact(facts, 'Size', formatSize(rom.fs_size_bytes));
   addFact(facts, 'File', rom.fs_name);
+  addRommLink(facts, rom);
 
   $('detail-summary').textContent = rom.summary || '';
 

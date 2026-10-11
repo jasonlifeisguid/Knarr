@@ -74,6 +74,7 @@ contextBridge.exposeInMainWorld('knarr', {
   checkForUpdate: () => ipcRenderer.invoke('update:check'),
   skipUpdate: (version: string) => ipcRenderer.invoke('update:skip', version),
   openReleasePage: (url?: string) => ipcRenderer.invoke('update:open', url),
+  openInRomm: (romId: number) => ipcRenderer.invoke('romm:openGame', romId),
   onUpdateAvailable: (cb: (payload: unknown) => void) =>
     ipcRenderer.on('update:available', (_e, payload) => cb(payload)),
   onGameRunning: (cb: (payload: unknown) => void) =>

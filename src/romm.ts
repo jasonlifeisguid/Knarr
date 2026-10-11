@@ -102,6 +102,16 @@ export function normalizeBaseUrl(input: string): string {
   return url;
 }
 
+/** The game's page in RomM's web UI, or '' if the server URL or id isn't usable. */
+export function rommGamePage(baseUrl: string, romId: unknown): string {
+  const id = Number(romId);
+  if (!Number.isInteger(id) || id <= 0) return '';
+  let url: URL;
+  try { url = new URL(normalizeBaseUrl(baseUrl || '')); } catch { return ''; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}/rom/${id}`;
+}
+
 type RomsPage = { items: Record<string, unknown>[]; total: number } | Record<string, unknown>[];
 
 export class RommClient {

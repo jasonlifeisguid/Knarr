@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
-import { normalizeBaseUrl, RommClient, RommPlatform, RommRom, slimRom } from './romm';
+import { normalizeBaseUrl, rommGamePage, RommClient, RommPlatform, RommRom, slimRom } from './romm';
 import * as config from './config';
 import * as cache from './cache';
 import * as downloads from './downloads';
@@ -762,6 +762,12 @@ function registerIpc(): void {
     // Only ever the project's own release pages
     const target = typeof url === 'string' && url.startsWith(updates.REPO_PAGE + '/') ? url : updates.RELEASES_PAGE;
     return shell.openExternal(target);
+  });
+
+  // The game's page in RomM's web UI, built from the saved server URL (never a URL from the renderer)
+  ipcMain.handle('romm:openGame', (_e, romId: number) => {
+    const target = rommGamePage(config.getCredentials().baseUrl, romId);
+    return target ? shell.openExternal(target) : undefined;
   });
 
   // Host OS (renderer gates the Steam Deck tip on this)

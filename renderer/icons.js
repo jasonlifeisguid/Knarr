@@ -78,7 +78,9 @@ const ICON_PATHS = {
 
 /** An icon as SVG markup (size in px). The fill variant fills the shape (a set pin / star). */
 function icon(name, size = 16, opts = {}) {
-  const body = ICON_PATHS[name] || '';
+  // The entries keep Lucide's own unclosed <svg …> opener; drop it, or the
+  // nested <svg> swallows whatever follows the icon (a button's label).
+  const body = (ICON_PATHS[name] || '').replace(/^\s*<svg\b[^>]*>/, '');
   const fill = opts.fill ? 'currentColor' : 'none';
   return `<svg class="icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="${fill}" stroke="currentColor" ` +
     `stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;

@@ -92,6 +92,15 @@ export interface RommSave {
   device_syncs?: { device_id: string; device_name: string; last_synced_at: string }[];
 }
 
+/** A file in RomM's firmware/BIOS list for a platform (keys, firmware, BIOS). */
+export interface RommFirmware {
+  id: number;
+  platform_id: number;
+  file_name: string;
+  file_size_bytes: number;
+  md5_hash: string;
+}
+
 const PAGE_SIZE = 500;
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -187,6 +196,30 @@ export class RommClient {
       if (resume.ifRange) headers['If-Range'] = resume.ifRange;
     }
     return { url, headers };
+  }
+
+  // ── Firmware ───────────────────────────────────────────────────────────
+
+  /** Firmware files RomM has, for one platform or (no id) all of them. */
+  async listFirmware(platformId?: number): Promise<RommFirmware[]> {
+    const data = await this.get(platformId ? `/firmware?platform_id=${platformId}` : '/firmware');
+    return (Array.isArray(data) ? data : []).map((raw) => {
+      const f = raw as Record<string, unknown>;
+      return {
+        id: Number(f.id),
+        platform_id: Number(f.platform_id),
+        file_name: typeof f.file_name === 'string' ? f.file_name : '',
+        file_size_bytes: Number(f.file_size_bytes) || 0,
+        md5_hash: typeof f.md5_hash === 'string' ? f.md5_hash : '',
+      };
+    }).filter((f) => f.id > 0 && f.file_name);
+  }
+
+  async openFirmwareStream(id: number, fileName: string, signal?: AbortSignal): Promise<Response> {
+    const url = `${this.baseUrl}/api/firmware/${id}/content/${encodeURIComponent(fileName)}`;
+    const response = await fetch(url, { headers: { Authorization: this.authHeader }, signal });
+    if (!response.ok || !response.body) throw new Error(`Firmware download failed: ${response.status} ${response.statusText}`);
+    return response;
   }
 
   // ── Saves (RomM ≥ 3.x; devices ≥ 5.x) ──────────────────────────────────

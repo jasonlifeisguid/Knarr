@@ -655,6 +655,12 @@ button.danger:hover { border-color: #f87171; }
 .pf-paths { display: flex; flex-direction: column; gap: 6px; }
 .pf-install-list { display: flex; flex-direction: column; gap: 6px; }
 .pf-add-path { align-self: flex-start; font-size: 0.76rem; padding: 5px 10px; }
+.pf-play-row, .pf-firmware-row { align-items: center; }
+.pf-play-row[hidden], .pf-firmware-row[hidden] { display: none; }
+.pf-play-label { font-size: 0.76rem; color: var(--text-muted); width: 64px; flex: none; }
+.pf-play-row select { flex: 0 1 220px; min-width: 0; }
+.pf-firmware-info { flex: 1; }
+.pf-firmware-get { font-size: 0.76rem; padding: 5px 10px; }
 .pf-extract {
   display: flex;
   align-items: center;

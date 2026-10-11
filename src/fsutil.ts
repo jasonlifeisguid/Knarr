@@ -3,6 +3,7 @@
  * the launchers and tests. No electron imports — unit-testable standalone.
  */
 import type { ChildProcess } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 
 /**
@@ -64,4 +65,35 @@ export function sanitizeFolderName(name: string): string {
 export function isInsideFolder(parent: string, child: string): boolean {
   const rel = path.relative(path.resolve(parent), path.resolve(child));
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/** True when `target` is a Windows .exe or a folder holding one at any depth.
+ *  Stops at the first hit, so a big game folder isn't walked to the end. */
+export function containsExe(target: string): boolean {
+  if (!target) return false;
+  let stat: fs.Stats;
+  try { stat = fs.statSync(target); } catch { return false; }
+  if (!stat.isDirectory()) return target.toLowerCase().endsWith('.exe');
+  const pending = [target];
+  while (pending.length) {
+    const dir = pending.pop() as string;
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (entry.isDirectory()) pending.push(path.join(dir, entry.name));
+      else if (entry.name.toLowerCase().endsWith('.exe')) return true;
+    }
+  }
+  return false;
+}
+
+/** Move a file, across drives too: a rename where it can, otherwise copy and delete. */
+export function moveFile(from: string, to: string): void {
+  try {
+    fs.renameSync(from, to);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+    fs.copyFileSync(from, to);
+    fs.unlinkSync(from);
+  }
 }

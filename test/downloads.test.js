@@ -138,6 +138,7 @@ test('flat zip (files at the archive root) → one folder named after the rom', 
 
   const rec = downloads.findDownload(11);
   assert.equal(rec.filePath, dest);
+  assert.equal(rec.hasExe, true, 'a PC game: Play applies');
 });
 
 test('zip with a single top-level folder keeps that folder name', async () => {
@@ -185,6 +186,49 @@ test('non-extract platform: plain download to the platform folder', async () => 
   assert.equal(events.at(-1).path, dest);
   assert.equal(fs.statSync(dest).size, 70000);
   assert.equal(downloads.findDownload(21).filePath, dest);
+});
+
+test('multi-file console game (RomM Switch folder): update/ and dlc/ kept, no exe so no Play', async () => {
+  const t = makeTemp();
+  // What RomM streams for a folder rom: files relative to the folder, plus its generated .m3u
+  const zip = makeArchive(t.root, 'switch.zip', {
+    'Game [0100000000010000][v0].nsp': 'base',
+    'update/Game [0100000000010800][v65536].nsp': 'upd',
+    'dlc/Game [DLC] [0100000000011001][v0].nsp': 'dlc',
+    'Game.m3u': 'Game [0100000000010000][v0].nsp',
+  }, 'zip');
+  const events = await run(stubClient(zip, 'Game.zip'), rom(22, 'Game: Switch Edition', 'Game'));
+  assert.equal(events.at(-1).status, 'extracted', JSON.stringify(events.at(-1)));
+  const dest = path.join(t.install, 'Game Switch Edition');
+  assert.ok(fs.existsSync(path.join(dest, 'update', 'Game [0100000000010800][v65536].nsp')));
+  assert.ok(fs.existsSync(path.join(dest, 'dlc', 'Game [DLC] [0100000000011001][v0].nsp')));
+  assert.equal(downloads.findDownload(22).hasExe, false);
+});
+
+test('AppImage on an extract platform: lands in the install path, executable, no Play', async () => {
+  const t = makeTemp();
+  const img = path.join(t.root, 'Emu.AppImage');
+  fs.writeFileSync(img, Buffer.alloc(4096, 1));
+  const events = await run(stubClient(img, 'Emu-x86_64.AppImage'), rom(23, 'Emu - Linux', 'Emu-x86_64.AppImage'));
+  assert.equal(events.at(-1).status, 'complete', JSON.stringify(events.at(-1)));
+  const dest = path.join(t.install, 'Emu-x86_64.AppImage');
+  assert.equal(events.at(-1).path, dest);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(dest).mode & 0o111, 0o111, 'exec bit set');
+  assert.equal(downloads.findDownload(23).hasExe, false);
+});
+
+test('AppImage on a plain-download platform is made executable too; other files are not', async () => {
+  const t = makeTemp();
+  const img = path.join(t.root, 'Tool.AppImage');
+  fs.writeFileSync(img, Buffer.alloc(4096, 2));
+  await run(stubClient(img, 'Tool.AppImage'), { id: 24, name: 'Tool', fsName: 'Tool.AppImage', platformId: 2, size: 0 });
+  const bin = path.join(t.root, 'rom2.bin');
+  fs.writeFileSync(bin, Buffer.alloc(4096, 3));
+  await run(stubClient(bin, 'rom2.bin'), { id: 25, name: 'Plain', fsName: 'rom2.bin', platformId: 2, size: 0 });
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(path.join(t.loose, 'Tool.AppImage')).mode & 0o111, 0o111);
+    assert.equal(fs.statSync(path.join(t.loose, 'rom2.bin')).mode & 0o111, 0);
+  }
 });
 
 /**
@@ -304,7 +348,8 @@ test('empty body is reported as an error, not retried forever', async () => {
 
 test('syncPlatform adopts folders, sweeps abandoned staging dirs, and writes once', async () => {
   const t = makeTemp();
-  fs.mkdirSync(path.join(t.install, 'Sonic Mania'));
+  fs.mkdirSync(path.join(t.install, 'Sonic Mania', 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(t.install, 'Sonic Mania', 'bin', 'SonicMania.exe'), 'MZ');
   fs.mkdirSync(path.join(t.install, '.r2sd-extract-99', 'Half A Game'), { recursive: true });
   fs.mkdirSync(path.join(t.install, 'Unrelated'));
   const res = downloads.syncPlatform(PLATFORM_ID, [
@@ -313,6 +358,7 @@ test('syncPlatform adopts folders, sweeps abandoned staging dirs, and writes onc
   ]);
   assert.deepEqual(res, { added: 1, removed: 0, moved: 0 });
   assert.equal(downloads.findDownload(31).filePath, path.join(t.install, 'Sonic Mania'));
+  assert.equal(downloads.findDownload(31).hasExe, true, 'adopted folder checked for an exe');
   assert.equal(downloads.findDownload(32), undefined);
   assert.equal(fs.existsSync(path.join(t.install, '.r2sd-extract-99')), false, 'abandoned extraction swept');
   assert.ok(fs.existsSync(path.join(t.install, 'Unrelated')), 'nothing else touched');

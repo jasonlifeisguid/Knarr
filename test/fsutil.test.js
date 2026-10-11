@@ -3,7 +3,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 
-const { safeJoin, sanitizeFolderName, sanitizeForMatch, isInsideFolder } = require('../dist/fsutil.js');
+const fs = require('fs');
+const os = require('os');
+const { safeJoin, sanitizeFolderName, sanitizeForMatch, isInsideFolder, containsExe } = require('../dist/fsutil.js');
 
 const root = path.resolve(process.platform === 'win32' ? 'C:\\Games\\install' : '/games/install');
 
@@ -74,4 +76,22 @@ test('whenSpawned settles with null on start and with the error on failure', asy
   const bad = new EventEmitter(); const p2 = whenSpawned(bad); bad.emit('error', new Error('ENOENT'));
   assert.equal((await p2).message, 'ENOENT');
   assert.doesNotThrow(() => bad.emit('error', new Error('later')), 'a later error has a listener');
+});
+
+test('containsExe: a file, a folder with an exe deep down, a folder without, a missing path', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'knarr-exe-'));
+  try {
+    fs.mkdirSync(path.join(root, 'pc', 'Binaries', 'Win64'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'pc', 'Binaries', 'Win64', 'Game.EXE'), 'MZ');
+    fs.mkdirSync(path.join(root, 'switch', 'update'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'switch', 'base.nsp'), 'x');
+    fs.writeFileSync(path.join(root, 'switch', 'update', 'u.nsp'), 'x');
+    fs.writeFileSync(path.join(root, 'Emu.AppImage'), 'x');
+    assert.equal(containsExe(path.join(root, 'pc')), true);
+    assert.equal(containsExe(path.join(root, 'pc', 'Binaries', 'Win64', 'Game.EXE')), true);
+    assert.equal(containsExe(path.join(root, 'switch')), false);
+    assert.equal(containsExe(path.join(root, 'Emu.AppImage')), false);
+    assert.equal(containsExe(path.join(root, 'nope')), false);
+    assert.equal(containsExe(''), false);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

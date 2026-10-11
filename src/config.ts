@@ -21,6 +21,29 @@ export interface PlatformSetup {
   folder: string;        // destination for standard (non-extracted) downloads
   autoExtract: boolean;  // extract zip/7z after (or during) download
   installPaths: string[]; // extraction destinations (first is default)
+  emulator?: EmulatorSetup; // "Play with": what Play runs this platform's games with
+}
+
+/** A platform's "Play with" emulator (see emulators.ts). */
+export interface EmulatorSetup {
+  /** An emulator Knarr installed: its rom id (the download record says where it is). */
+  romId?: number;
+  /** Or any program on disk. */
+  path?: string;
+  /** Arguments; {rom} is replaced by the game file. Empty = the emulator's suggested ones. */
+  args: string;
+}
+
+/** Keep only well-formed fields of a stored/received emulator setting. */
+export function normalizeEmulator(raw: unknown): EmulatorSetup | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const romId = Number(r.romId);
+  const p = typeof r.path === 'string' ? r.path.trim() : '';
+  const args = typeof r.args === 'string' ? r.args.trim() : '';
+  if (Number.isInteger(romId) && romId > 0) return { romId, args };
+  if (p) return { path: p, args };
+  return undefined;
 }
 
 interface StoredConfig {
@@ -265,6 +288,8 @@ export function setConfig(update: {
         installPaths: (Array.isArray(setup.installPaths) ? setup.installPaths : [])
           .map((p) => (p || '').trim()).filter(Boolean),
       };
+      const emulator = normalizeEmulator(setup.emulator);
+      if (emulator) cleaned[id].emulator = emulator;
     }
     stored.platforms = cleaned;
   }

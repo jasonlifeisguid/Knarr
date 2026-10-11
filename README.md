@@ -75,6 +75,7 @@ Downloads need somewhere to go. Open **Settings → Platform Folders…** and, p
 
 - **Plain download** (most consoles): set a **Download folder**. The ROM file lands there as-is — point it at the folder your emulator or frontend already scans (e.g. `/home/deck/retrodeck/roms/snes`).
 - **Extract** (Windows games, or anything shipped as an archive): tick **Extract** and set one or more **Install paths**. Archives are unpacked there, one folder per game, and the archive is removed afterwards. With more than one install path (say, internal storage and an SD card) you're asked where each game goes when you download it.
+  Multi-file games in RomM (a folder per game, e.g. Switch games with `update/` and `dlc/` subfolders) arrive as one zip and unpack to one folder with those subfolders intact, ready for an emulator that loads updates and DLC from a folder. A file that isn't an archive (an emulator's `.AppImage`, say) is placed straight in the install path; on Linux, AppImages are made executable.
 
 Two helpers at the top of the dialog:
 
@@ -111,7 +112,7 @@ Dialogs, dropdown menus and the settings screen are all navigable the same way. 
 
 ## Playing Windows games
 
-Windows games (RomM's *Windows* platform, or any platform you've set to **Extract**) get a **▶ Play** button once they're installed. The first press asks you to pick the game's executable; that becomes the default and later presses launch straight away. You can change it later — see *Changing which executable Play runs* below.
+Windows games (RomM's *Windows* platform, or any platform you've set to **Extract**) get a **▶ Play** button once they're installed, as long as the install contains a Windows `.exe`. Installs without one (an extracted Switch game, say) are played through an emulator instead — see *Playing emulated games* below. The first press asks you to pick the game's executable; that becomes the default and later presses launch straight away. You can change it later — see *Changing which executable Play runs* below.
 
 - **On Windows**, Play runs the executable directly.
 - **On Linux / Steam Deck**, a Windows `.exe` needs Proton. You have two routes:
@@ -174,6 +175,19 @@ The same dialog can create a shortcut for any executable: a `.lnk` on the Window
 
 ---
 
+## Playing emulated games
+
+Knarr doesn't install or configure emulators for you, but it can fetch them from RomM like any game and start them with one. The setup that works well for modern consoles (Switch, PS3, Xbox 360), where each needs its own standalone emulator:
+
+- **Emulators in RomM.** Give RomM a platform folder named `emulators` and put each emulator build in it, one entry per OS — e.g. `Eden - Linux/`, `Eden - Steam Deck/`, `Eden - Windows/`. Avoid parentheses in the names: RomM treats `(…)` as tags and drops them from the title. On each machine, download the build for that machine. An AppImage needs no extraction (plain download is fine) and is made executable; a Windows zip wants **Extract**.
+- **Games as folders.** A game with updates and DLC can be a folder in RomM — the base file at the top, `update/` and `dlc/` beside it. RomM sends a folder as one zip, so set **Extract** for that platform; the folder arrives intact.
+- **Play with.** In **Settings → Platform Folders**, each platform has **Play with**: pick an emulator Knarr installed (or **Other program…** for one installed some other way) and its arguments, where `{rom}` is the game. Knarr suggests arguments for emulators it knows (Eden: `-f -g {rom}`, fullscreen). Installed games on that platform then get **▶ Play**. For a folder, Play hands the emulator the base game — for Switch the file whose title id ends in `000` — never anything in `update/` or `dlc/`, which the emulator picks up itself. Knarr gets out of the way while the emulator runs, as it does for Windows games. If you later download a newer build of the same emulator entry, Play uses it.
+- **Firmware.** A platform whose firmware RomM knows (RomM's per-platform `bios/<platform>/` folder: keys, system firmware, BIOS) shows **Firmware · N files in RomM** with **Get firmware**. It downloads them into a `firmware` folder beside the games and unpacks archives, so each firmware version is one folder of files. Installing them is the emulator's step — for Eden, **Tools → Install Decryption Keys** (pick `prod.keys`) and **Tools → Install Firmware → From Folder**. A second press only fetches files that changed in RomM.
+
+**Switch with Eden, per machine:** download the Eden build for the machine; set Switch to **Extract** with an install path such as `~/Roms/Switch`, and **Play with** to that Eden; press **Get firmware** and install keys and firmware in Eden; in Eden, add `~/Roms/Switch` as a game folder and under external content (so updates and DLC load without installing them).
+
+---
+
 ## Steam Deck / Game Mode
 
 Knarr runs in Game Mode and can add itself to your Steam library:
@@ -207,7 +221,7 @@ The interface zooms to **140%** automatically on a Steam Deck — its 7" 1280×8
 - **Fast library browsing** — full library with pagination (no 500-game cap), stale-while-revalidate caching with delta sync, lazy-loaded cover art, search, genre filter, five sort orders, grid and list views, pinned platforms.
 - **Downloads** — serial queue with progress, cancel, resume after interruptions, and streaming extract-while-downloading for zips; bundled 7-Zip 26.03 for `.7z` — the official binaries, one per platform (see [`vendor/7zip`](vendor/7zip/README.md) for provenance and hashes). Every extracted game gets exactly one folder under the install path.
 - **Multiple install paths** per platform, with a prompt to choose when more than one is configured.
-- **Play** — direct on Windows; through **Faugus Launcher** on Linux; or via **Add to Steam** with live name / cover art / Proton configuration when Decky is present.
+- **Play** — direct on Windows; through **Faugus Launcher** on Linux; or via **Add to Steam** with live name / cover art / Proton configuration when Decky is present. Emulated platforms: **Play with** an emulator per platform, and **Get firmware** from RomM.
 - **Saves & Folders…** — one click to a game's install folder or its Proton-side saves and configs; save backup, restore and RomM cloud sync per game.
 - **Update check** — a daily, unauthenticated request to GitHub's releases API tells you when a newer release exists (Settings → Display → Updates; never installs anything by itself).
 - **Add to Steam** with a byte-safe `shortcuts.vdf` writer (covered by tests against a real Steam file) + desktop shortcuts.

@@ -21,6 +21,8 @@ import * as updates from './updates';
 import * as hypr from './hyprland';
 import * as cli from './cli';
 import * as brand from './brand';
+import * as emulators from './emulators';
+import * as firmware from './firmware';
 
 // Cover art and screenshots are served to the renderer over a private scheme
 // that maps only onto the covers cache directory, so the renderer's CSP no
@@ -714,6 +716,15 @@ function registerIpc(): void {
     return result.canceled ? null : result.filePaths[0];
   });
 
+  ipcMain.handle('dialog:pickFile', async (_e, title?: string) => {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      title: title || 'Select file',
+      // A macOS .app is a folder; let it be picked as the program
+      properties: process.platform === 'darwin' ? ['openFile', 'openDirectory', 'treatPackageAsDirectory'] : ['openFile'],
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
+
   // Downloads
   ipcMain.handle('downloads:list', () => downloads.listDownloads());
 
@@ -886,6 +897,48 @@ function registerIpc(): void {
     });
     if (res.ok) gameStarted(romId, gameName, res.exitTracked === true, res.pid);
     return { ...res, cloud: cloudAction };
+  });
+
+  // "Play with": start the platform's emulator with an installed game
+  ipcMain.handle('game:launchEmulated', async (_e, romId: number) => {
+    const rec = downloads.findDownload(romId);
+    if (!rec || !rec.filePath) return { ok: false, error: 'This game is not installed' };
+    const setup = config.getPublicConfig().platforms[String(rec.platformId)];
+    const gameName = rec.romName || path.basename(rec.filePath);
+    const res = await emulators.launchEmulated(rec.filePath, setup?.emulator, downloads.findDownload, {
+      onExit: () => gameExited(romId, gameName),
+    });
+    if (!res.ok) return res;
+    gameStarted(romId, gameName, true, res.pid);
+    // Name an installed emulator as RomM does ("Eden - Linux"), not by its file
+    const emuRec = setup?.emulator?.romId ? downloads.findDownload(setup.emulator.romId) : undefined;
+    return { ...res, emulator: emuRec?.romName || res.emulator };
+  });
+  ipcMain.handle('emulator:suggestArgs', (_e, program: string) => emulators.suggestArgs(String(program || '')));
+
+  // Firmware from RomM: how many files per platform, and "Get firmware" into <games>/firmware
+  ipcMain.handle('firmware:counts', async () => {
+    if (!config.isConfigured()) return {};
+    try {
+      const counts: Record<string, number> = {};
+      for (const f of await getClient().listFirmware()) counts[f.platform_id] = (counts[f.platform_id] || 0) + 1;
+      return counts;
+    } catch { return {}; } // older RomM / offline: the row just doesn't offer it
+  });
+  ipcMain.handle('firmware:get', async (_e, platformId: number) => {
+    try {
+      const setup = config.getPublicConfig().platforms[String(platformId)];
+      const res = await firmware.getFirmware(getClient(), platformId, firmware.firmwareDir(setup));
+      return { ok: true, ...res };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+  ipcMain.handle('firmware:open', async (_e, platformId: number) => {
+    const dir = firmware.firmwareDir(config.getPublicConfig().platforms[String(platformId)]);
+    if (!dir || !fs.existsSync(dir)) return { error: 'No firmware folder yet — use Get firmware first' };
+    const err = await shell.openPath(dir);
+    return err ? { error: err } : {};
   });
 
   ipcMain.handle('game:folders', (_e, romId: number) => gameFolders(romId));

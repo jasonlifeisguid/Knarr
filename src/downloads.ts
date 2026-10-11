@@ -32,7 +32,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { RommClient } from './romm';
 import * as config from './config';
-import { isInsideFolder, safeFileName, sanitizeForMatch, sanitizeFolderName } from './fsutil';
+import { containsExe, isInsideFolder, moveFile, safeFileName, sanitizeForMatch, sanitizeFolderName } from './fsutil';
 
 import { sevenZipPath } from './sevenzip';
 import { pumpToFile, PumpHooks, PumpOptions, PumpResult } from './pump';
@@ -47,6 +47,10 @@ export interface DownloadRecord {
   size: number;
   downloadedAt: number;
   defaultExe?: string; // chosen executable for Play / shortcuts
+  /** Whether the install holds a Windows .exe, i.e. Play / shortcuts apply. Switch
+   *  games, emulator AppImages etc. don't. Absent on records from before 3.1 — those
+   *  are all PC games, so absent counts as true. */
+  hasExe?: boolean;
   /** Cloud-save sync point for this game (see cloudsaves.ts). */
   cloud?: { saveId: number; contentHash: string; fingerprint: string; syncedAt: number };
   /** Include config-like files (.ini/.cfg/Saved/Config) in this game's save backups. */
@@ -164,6 +168,7 @@ export function findDownload(romId: number): DownloadRecord | undefined {
 }
 
 function upsertRecord(record: DownloadRecord): void {
+  if (record.hasExe === undefined) record.hasExe = containsExe(record.filePath);
   const records = loadRecords().filter((r) => r.romId !== record.romId);
   records.push(record);
   saveRecords(records);
@@ -194,6 +199,13 @@ export function setDefaultExe(romId: number, exePath: string): boolean {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
+
+/** A downloaded AppImage (an emulator build, say) arrives without its exec bit;
+ *  give it one so it runs from the file manager or a launcher. */
+function markExecutable(file: string): void {
+  if (process.platform === 'win32' || !/\.appimage$/i.test(file)) return;
+  try { fs.chmodSync(file, 0o755); } catch { /* best effort */ }
+}
 
 function platformSetup(platformId: number): config.PlatformSetup {
   return config.getPublicConfig().platforms[String(platformId)]
@@ -296,7 +308,7 @@ function archiveUnpackedSize(archive: string): Promise<number | null> {
   });
 }
 
-function run7za(archive: string, dest: string, onPercent: (pct: number) => void): Promise<void> {
+export function run7za(archive: string, dest: string, onPercent: (pct: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     // -bsp1 prints progress percentages to stdout (the exec bit is sevenZipPath's job)
     const proc = spawn(sevenZipPath(), ['x', archive, `-o${dest}`, '-y', '-bsp1'], { windowsHide: true });
@@ -611,6 +623,7 @@ export async function startDownload(
           controller.abort();
           try { fs.unlinkSync(resumeMetaPath); } catch { /* absent */ }
           try { if (fs.existsSync(partPath)) fs.unlinkSync(partPath); } catch { /* best effort */ }
+          markExecutable(filePath);
           upsertRecord({ romId: rom.id, romName: rom.name, fileName, filePath, platformId: rom.platformId, size: total, downloadedAt: Date.now() });
           emit({ status: 'complete', percent: 100, message: 'Already downloaded', path: filePath });
           return;
@@ -684,6 +697,7 @@ export async function startDownload(
 
     // ── Post-download ────────────────────────────────────────────────
     if (!extract) {
+      markExecutable(filePath);
       upsertRecord({ romId: rom.id, romName: rom.name, fileName, filePath, platformId: rom.platformId, size: downloaded, downloadedAt: Date.now() });
       emit({ status: 'complete', percent: 100, path: filePath });
       return;
@@ -693,9 +707,10 @@ export async function startDownload(
       // Not an archive — auto-extract platform but plain file: move to install path
       const finalPath = path.join(installPath, fileName);
       if (path.resolve(finalPath) !== path.resolve(filePath)) {
-        fs.renameSync(filePath, finalPath);
+        moveFile(filePath, finalPath); // the staging folder may be on another drive
         filePath = finalPath;
       }
+      markExecutable(filePath);
       upsertRecord({ romId: rom.id, romName: rom.name, fileName, filePath, platformId: rom.platformId, size: downloaded, downloadedAt: Date.now() });
       emit({ status: 'complete', percent: 100, path: filePath });
       return;
@@ -897,7 +912,7 @@ export function syncPlatform(
   const recordedIds = new Set(records.filter((r) => r.platformId === platformId).map((r) => r.romId));
   for (const f of found.values()) {
     if (recordedIds.has(f.rom.id)) continue;
-    records.push({ romId: f.rom.id, romName: f.rom.name, fileName: f.fileName, filePath: f.filePath, platformId, size: f.size, downloadedAt: Date.now() });
+    records.push({ romId: f.rom.id, romName: f.rom.name, fileName: f.fileName, filePath: f.filePath, platformId, size: f.size, downloadedAt: Date.now(), hasExe: containsExe(f.filePath) });
     added++;
   }
 

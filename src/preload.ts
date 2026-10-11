@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('knarr', {
   getRoms: (platformId: number, opts?: object) => ipcRenderer.invoke('library:roms', platformId, opts),
   getAsset: (romId: number, serverPath: string) => ipcRenderer.invoke('asset:get', romId, serverPath),
   pickFolder: (title?: string) => ipcRenderer.invoke('dialog:pickFolder', title),
+  pickFile: (title?: string) => ipcRenderer.invoke('dialog:pickFile', title),
 
   // Downloads
   listDownloads: () => ipcRenderer.invoke('downloads:list'),
@@ -54,6 +55,11 @@ contextBridge.exposeInMainWorld('knarr', {
   addSelfToSteam: () => ipcRenderer.invoke('steam:addSelf'),
   setDefaultExe: (romId: number, exePath: string) => ipcRenderer.invoke('game:setDefaultExe', romId, exePath),
   launchGame: (romId: number, exePath?: string, coverPath?: string) => ipcRenderer.invoke('game:launch', romId, exePath, coverPath),
+  launchEmulated: (romId: number) => ipcRenderer.invoke('game:launchEmulated', romId),
+  suggestEmulatorArgs: (program: string) => ipcRenderer.invoke('emulator:suggestArgs', program),
+  firmwareCounts: () => ipcRenderer.invoke('firmware:counts'),
+  getFirmware: (platformId: number) => ipcRenderer.invoke('firmware:get', platformId),
+  openFirmwareFolder: (platformId: number) => ipcRenderer.invoke('firmware:open', platformId),
   backupSaves: (romId: number, prefixRoot: string) => ipcRenderer.invoke('saves:backup', romId, prefixRoot),
   cloudStatus: (romId: number, prefixRoot: string) => ipcRenderer.invoke('cloud:status', romId, prefixRoot),
   cloudUpload: (romId: number, prefixRoot: string) => ipcRenderer.invoke('cloud:upload', romId, prefixRoot),

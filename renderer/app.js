@@ -185,6 +185,22 @@ function platformSetup(platformId) {
     ?? { folder: '', autoExtract: false, installPaths: [] };
 }
 
+/** Installed as a PC game: extracted, and the install holds a Windows .exe. Gets
+ *  Play, the exe picker, shortcuts and cloud saves. Extracted Switch games and
+ *  emulator AppImages don't (hasExe false); older records lack the flag and were
+ *  all PC games. */
+function isPcInstall(rom) {
+  const rec = state.downloads.get(rom.id);
+  return Boolean(rec) && platformSetup(rom.platform_id).autoExtract && rec.hasExe !== false;
+}
+
+/** Installed, not a PC game, and its platform has a "Play with" emulator. */
+function isEmulatedInstall(rom) {
+  return state.downloads.has(rom.id) && !isPcInstall(rom) && Boolean(platformSetup(rom.platform_id).emulator);
+}
+
+const canPlay = (rom) => isPcInstall(rom) || isEmulatedInstall(rom);
+
 async function setAssetSrc(img, romId, serverPath) {
   if (!serverPath) return;
   const url = await window.knarr.getAsset(romId, serverPath); // knarr-asset://covers/<file>
@@ -454,17 +470,18 @@ function updateCardProgress(romId) {
   }
 }
 
-/** Green Play/installed badge. For extractable PC games it's a clickable Play
- *  button (launches the default exe, or opens the exe picker to choose one). */
+/** Green Play/installed badge. For installed PC games it's a clickable Play
+ *  button (launches the default exe, or opens the exe picker to choose one);
+ *  for other installs on a platform with a "Play with" emulator it starts that. */
 function makeBadge(rom) {
   if (!state.downloads.has(rom.id)) return null;
   const badge = document.createElement('div');
   badge.className = 'dl-badge';
   badge.innerHTML = ICON.play;
-  if (platformSetup(rom.platform_id).autoExtract) {
+  if (canPlay(rom)) {
     badge.classList.add('playable');
     const rec = state.downloads.get(rom.id);
-    badge.title = rec && rec.defaultExe ? 'Play' : 'Play (choose executable)';
+    badge.title = isEmulatedInstall(rom) || rec?.defaultExe ? 'Play' : 'Play (choose executable)';
     badge.addEventListener('click', (e) => { e.stopPropagation(); playGame(rom); });
   } else {
     badge.title = 'Installed';
@@ -581,11 +598,11 @@ function showContextMenu(e, rom) {
   item('Details…', () => openDetail(rom));
   const progress = state.progress.get(rom.id);
   const downloaded = state.downloads.has(rom.id);
-  const setup = platformSetup(rom.platform_id);
   if (progress) {
     item('Cancel download', () => window.knarr.cancelDownload(rom.id), true);
   } else if (downloaded) {
-    if (setup.autoExtract) {
+    if (isEmulatedInstall(rom)) item('Play', () => playGame(rom));
+    if (isPcInstall(rom)) {
       item('Play', () => playGame(rom));
       item('Choose executable…', () => openExePicker(rom));
       item('Add to Steam / Shortcut…', () => openExePicker(rom));
@@ -1131,14 +1148,15 @@ function refreshDetailActions() {
   dlBtn.hidden = Boolean(inQueue || record);
   cancelBtn.hidden = !inQueue;
   deleteBtn.hidden = !record || Boolean(inQueue);
-  // Shortcut maker + Play: only for installed (extracted) PC games
-  shortcutBtn.hidden = !(record && setup.autoExtract && !inQueue);
-  playBtn.hidden = !(record && setup.autoExtract && !inQueue);
+  // Shortcut maker + Play: only for installed PC games
+  const pcInstall = isPcInstall(rom) && !inQueue;
+  shortcutBtn.hidden = !pcInstall;
+  playBtn.hidden = !(canPlay(rom) && !inQueue);
   $('btn-folders').hidden = !(record && record.filePath && !inQueue);
-  playBtn.innerHTML = icon('play') + (record && record.defaultExe ? ' Play' : ' Play…');
+  playBtn.innerHTML = icon('play') + (isEmulatedInstall(rom) || record?.defaultExe ? ' Play' : ' Play…');
   // What Play actually runs — and a way back to the picker when it's the wrong exe
   const exeRow = $('detail-exe-row');
-  const showExe = Boolean(record && record.defaultExe && setup.autoExtract && !inQueue);
+  const showExe = Boolean(pcInstall && record.defaultExe);
   exeRow.hidden = !showExe;
   if (showExe) {
     const full = record.defaultExe;
@@ -1189,7 +1207,7 @@ async function refreshDetailCloud() {
   const rom = state.detailRom;
   const row = $('detail-cloud-row');
   const rec = rom && state.downloads.get(rom.id);
-  if (!rom || !rec || !platformSetup(rom.platform_id).autoExtract || queueStatusFor(rom.id)) { row.hidden = true; return; }
+  if (!rom || !rec || !isPcInstall(rom) || queueStatusFor(rom.id)) { row.hidden = true; return; }
   const st = await window.knarr.cloudOwnStatus(rom.id);
   if (state.detailRom?.id !== rom.id) return; // another game's dialog by now
   const line = st.ok && !st.unscoped ? CLOUD_LINE[st.state] : null;
@@ -1436,6 +1454,12 @@ async function playFromPicker() {
 
 /** Play a downloaded game: launch its default exe, or pick one first. */
 async function playGame(rom) {
+  if (isEmulatedInstall(rom)) {
+    const res = await window.knarr.launchEmulated(rom.id);
+    if (res.ok) toast(`Launching ${rom.name || rom.fs_name} with ${res.emulator}…`, 'success');
+    else toast(res.error, 'error');
+    return;
+  }
   const rec = state.downloads.get(rom.id);
   if (rec && rec.defaultExe) {
     launchToast(rom, await window.knarr.launchGame(rom.id, undefined, rom.path_cover_large || rom.path_cover_small || ''));
@@ -1747,6 +1771,117 @@ function clearDirty() {
   $('pf-dirty').textContent = '';
 }
 
+/** Emulators Knarr installed from RomM: downloads from the platform whose folder is `emulators`. */
+function installedEmulators() {
+  const ids = new Set(state.platforms.filter((p) => (p.fs_slug || '').toLowerCase() === 'emulators').map((p) => p.id));
+  return [...state.downloads.values()].filter((r) => ids.has(r.platformId))
+    .sort((a, b) => a.romName.localeCompare(b.romName));
+}
+
+const baseName = (p) => p.split(/[\\/]/).pop();
+
+/** "Play with" for a platform row: which emulator Play uses, and its arguments. */
+function makePlayWithRow(p, setup) {
+  const row = document.createElement('span');
+  row.className = 'path-row pf-play-row';
+  const label = document.createElement('span');
+  label.className = 'pf-play-label';
+  label.textContent = 'Play with';
+  const select = document.createElement('select');
+  select.className = 'pf-emulator';
+  const add = (value, text) => { const o = document.createElement('option'); o.value = value; o.textContent = text; select.appendChild(o); return o; };
+  add('', 'Nothing (no Play button)');
+  for (const r of installedEmulators()) add(`rom:${r.romId}`, r.romName);
+  const emu = setup.emulator;
+  if (emu?.romId && !select.querySelector(`option[value="rom:${emu.romId}"]`)) add(`rom:${emu.romId}`, 'Emulator not installed here');
+  if (emu?.path) add(`path:${emu.path}`, baseName(emu.path)).title = emu.path;
+  add('browse', 'Other program…');
+  select.value = emu?.romId ? `rom:${emu.romId}` : emu?.path ? `path:${emu.path}` : '';
+  const args = document.createElement('input');
+  args.type = 'text';
+  args.className = 'pf-emu-args';
+  args.placeholder = 'Arguments — {rom} is the game';
+  args.title = 'Arguments for the emulator. {rom} is replaced by the game file; without it the game goes last.';
+  args.value = emu?.args || '';
+  args.addEventListener('input', markDirty);
+  let previous = select.value;
+  const applyArgs = () => { args.hidden = !select.value; };
+  select.addEventListener('change', async () => {
+    if (select.value === 'browse') {
+      const picked = await window.knarr.pickFile(`Emulator for ${p.name}`);
+      if (!picked) { select.value = previous; return; }
+      let opt = select.querySelector(`option[value="${CSS.escape(`path:${picked}`)}"]`);
+      if (!opt) { opt = document.createElement('option'); opt.value = `path:${picked}`; opt.textContent = baseName(picked); opt.title = picked; select.insertBefore(opt, select.lastElementChild); }
+      select.value = opt.value;
+    }
+    previous = select.value;
+    if (select.value && !args.value.trim()) {
+      args.value = await window.knarr.suggestEmulatorArgs(select.selectedOptions[0].title || select.selectedOptions[0].textContent);
+    }
+    applyArgs();
+    markDirty();
+  });
+  applyArgs();
+  row.append(label, select, args);
+  return row;
+}
+
+/** The emulator setting a row's "Play with" controls describe, or undefined. */
+function readPlayWith(row) {
+  const select = row.querySelector('.pf-emulator');
+  if (!select || !select.value || select.value === 'browse') return undefined;
+  const args = row.querySelector('.pf-emu-args').value.trim();
+  if (select.value.startsWith('rom:')) return { romId: Number(select.value.slice(4)), args };
+  return { path: select.value.slice(5), args };
+}
+
+/** "Firmware: N files in RomM [Get firmware] [Open]" — shown once the counts arrive. */
+function makeFirmwareRow(p) {
+  const row = document.createElement('span');
+  row.className = 'path-row pf-firmware-row';
+  row.hidden = true;
+  const label = document.createElement('span');
+  label.className = 'pf-play-label';
+  label.textContent = 'Firmware';
+  const info = document.createElement('span');
+  info.className = 'pf-firmware-info small muted';
+  const get = document.createElement('button');
+  get.className = 'secondary pf-firmware-get';
+  get.textContent = 'Get firmware';
+  get.title = 'Download this platform\'s keys/firmware/BIOS from RomM into a firmware folder beside its games';
+  get.addEventListener('click', async () => {
+    if ($('pf-dirty').textContent) { toast('Save your changes first — firmware goes into the saved folder', 'error'); return; }
+    get.disabled = true;
+    const old = get.textContent;
+    get.textContent = 'Getting…';
+    try {
+      const res = await window.knarr.getFirmware(p.id);
+      if (!res.ok) { toast(res.error, 'error'); return; }
+      const fresh = res.files.filter((f) => f.status !== 'unchanged').length;
+      toast(fresh ? `Firmware for ${p.name}: ${fresh} file${fresh === 1 ? '' : 's'} saved to ${res.dest}` : `Firmware for ${p.name} is already up to date in ${res.dest}`, 'success');
+      open.hidden = false;
+    } finally { get.disabled = false; get.textContent = old; }
+  });
+  const open = document.createElement('button');
+  open.className = 'icon-btn';
+  open.innerHTML = icon('folder');
+  open.title = 'Open the firmware folder';
+  open.addEventListener('click', async () => { const r = await window.knarr.openFirmwareFolder(p.id); if (r.error) toast(r.error, 'error'); });
+  row.append(label, info, get, open);
+  return row;
+}
+
+async function fillFirmwareRows() {
+  const counts = await window.knarr.firmwareCounts();
+  for (const row of document.querySelectorAll('.pf-row')) {
+    const n = counts[row.dataset.platformId] || 0;
+    const fw = row.querySelector('.pf-firmware-row');
+    if (!fw || !n) continue;
+    fw.querySelector('.pf-firmware-info').textContent = `${n} file${n === 1 ? '' : 's'} in RomM`;
+    fw.hidden = false;
+  }
+}
+
 function buildPlatformRows() {
   const rows = $('pf-rows');
   rows.innerHTML = '';
@@ -1828,6 +1963,8 @@ function buildPlatformRows() {
     for (const v of initialPaths) installList.appendChild(makeInstallRow(v));
     installList.appendChild(addPathBtn);
     paths.appendChild(installList);
+    if ((p.fs_slug || '').toLowerCase() !== 'emulators') paths.appendChild(makePlayWithRow(p, setup));
+    paths.appendChild(makeFirmwareRow(p));
 
     const extract = document.createElement('label');
     extract.className = 'pf-extract';
@@ -1856,6 +1993,7 @@ async function openPlatformsModal() {
   buildPlatformRows();
   clearDirty();
   $('platforms-modal').hidden = false;
+  fillFirmwareRows();
 }
 
 function closePlatformsModal() {
@@ -1874,6 +2012,8 @@ async function savePlatformsModal() {
       autoExtract: row.querySelector('.pf-autoextract').checked,
       installPaths: [...new Set([...row.querySelectorAll('.pf-install')].map((i) => i.value.trim()).filter(Boolean))],
     };
+    const emulator = readPlayWith(row);
+    if (emulator) platforms[id].emulator = emulator;
   }
   await window.knarr.setConfig({
     platforms,

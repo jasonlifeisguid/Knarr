@@ -205,16 +205,56 @@ test('multi-file console game (RomM Switch folder): update/ and dlc/ kept, no ex
   assert.equal(downloads.findDownload(22).hasExe, false);
 });
 
-test('AppImage on an extract platform: lands in the install path, executable, no Play', async () => {
+test('AppImage on an extract platform: its own folder, executable, no Play', async () => {
   const t = makeTemp();
   const img = path.join(t.root, 'Emu.AppImage');
   fs.writeFileSync(img, Buffer.alloc(4096, 1));
   const events = await run(stubClient(img, 'Emu-x86_64.AppImage'), rom(23, 'Emu - Linux', 'Emu-x86_64.AppImage'));
   assert.equal(events.at(-1).status, 'complete', JSON.stringify(events.at(-1)));
-  const dest = path.join(t.install, 'Emu-x86_64.AppImage');
-  assert.equal(events.at(-1).path, dest);
-  if (process.platform !== 'win32') assert.equal(fs.statSync(dest).mode & 0o111, 0o111, 'exec bit set');
-  assert.equal(downloads.findDownload(23).hasExe, false);
+  const folder = path.join(t.install, 'Emu - Linux');
+  const file = path.join(folder, 'Emu-x86_64.AppImage');
+  assert.equal(events.at(-1).path, folder);
+  assert.deepEqual(fs.readdirSync(t.install), ['Emu - Linux'], 'nothing loose in the install path');
+  if (process.platform !== 'win32') assert.equal(fs.statSync(file).mode & 0o111, 0o111, 'exec bit set');
+  const rec = downloads.findDownload(23);
+  assert.equal(rec.filePath, folder);
+  assert.equal(rec.hasExe, false);
+});
+
+test('a newer single-file download replaces the old file only; the rest of its folder stays', async () => {
+  const t = makeTemp();
+  const v1 = path.join(t.root, 'v1');
+  fs.writeFileSync(v1, 'one');
+  await run(stubClient(v1, 'Emu-v1.AppImage'), rom(26, 'Emu - Linux', 'Emu-v1.AppImage'));
+  const folder = path.join(t.install, 'Emu - Linux');
+  fs.mkdirSync(path.join(folder, 'user'));
+  fs.writeFileSync(path.join(folder, 'user', 'save.bin'), 'progress'); // an emulator's portable data
+  const v2 = path.join(t.root, 'v2');
+  fs.writeFileSync(v2, 'two');
+  await run(stubClient(v2, 'Emu-v2.AppImage'), rom(26, 'Emu - Linux', 'Emu-v2.AppImage'));
+  assert.deepEqual(fs.readdirSync(folder).sort(), ['Emu-v2.AppImage', 'user']);
+  assert.equal(fs.readFileSync(path.join(folder, 'user', 'save.bin'), 'utf8'), 'progress');
+  assert.equal(downloads.findDownload(26).fileName, 'Emu-v2.AppImage');
+});
+
+test('a loose file from before 3.1 is tidied when the game is downloaded into its folder; a copy elsewhere is not', async () => {
+  const t = makeTemp();
+  const loose = path.join(t.install, 'Old.AppImage');
+  fs.writeFileSync(loose, 'old');
+  const elsewhere = path.join(t.loose, 'Other.nsp');
+  fs.writeFileSync(elsewhere, 'kept');
+  const recs = [
+    { romId: 27, romName: 'Emu', fileName: 'Old.AppImage', filePath: loose, platformId: PLATFORM_ID, size: 3, downloadedAt: 1 },
+    { romId: 28, romName: 'Game', fileName: 'Other.nsp', filePath: elsewhere, platformId: 2, size: 4, downloadedAt: 1 },
+  ];
+  fs.writeFileSync(path.join(t.userData, 'downloads.json'), JSON.stringify(recs));
+  const img = path.join(t.root, 'new');
+  fs.writeFileSync(img, 'new');
+  await run(stubClient(img, 'New.AppImage'), rom(27, 'Emu', 'New.AppImage'));
+  await run(stubClient(img, 'Game.nsp'), rom(28, 'Game', 'Game.nsp'));
+  assert.equal(fs.existsSync(loose), false, 'the old loose file of the same rom went');
+  assert.ok(fs.existsSync(path.join(t.install, 'Emu', 'New.AppImage')));
+  assert.equal(fs.readFileSync(elsewhere, 'utf8'), 'kept', 'a download kept in another folder is left alone');
 });
 
 test('AppImage on a plain-download platform is made executable too; other files are not', async () => {

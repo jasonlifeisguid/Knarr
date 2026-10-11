@@ -200,6 +200,31 @@ export function setDefaultExe(romId: number, exePath: string): boolean {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
+/** The folder a single (non-archive) download gets on an Extract platform:
+ *  `<install path>/<rom name>/`. */
+function singleFileFolder(installPath: string, rom: RomInfo, fileName: string): string {
+  const folder = path.join(installPath, sanitizeFolderName(rom.name || fileName.replace(/\.[^.]+$/, '')));
+  if (isProtected(folder)) throw new Error(`Refusing to install into a configured folder: ${folder}`);
+  return folder;
+}
+
+/**
+ * A newer download of the same rom replaced its file: remove the previous one
+ * (an older emulator build), but only that file — anything else in the folder
+ * (an emulator's portable data) stays. Also tidies a pre-3.1 loose file that
+ * sat directly in the install path.
+ */
+function dropPreviousFile(previous: DownloadRecord | undefined, installPath: string, gameFolder: string, kept: string): void {
+  if (!previous?.filePath) return;
+  const candidates = [path.join(gameFolder, path.basename(previous.fileName || ''))]; // same folder, older file name
+  // A loose file from before 3.1 — only straight in this install path, never a copy kept elsewhere
+  if (path.resolve(path.dirname(previous.filePath)) === path.resolve(installPath)) candidates.push(previous.filePath);
+  for (const old of candidates) {
+    if (!old || path.resolve(old) === path.resolve(kept)) continue;
+    try { if (fs.statSync(old).isFile()) fs.unlinkSync(old); } catch { /* gone already */ }
+  }
+}
+
 /** A downloaded AppImage (an emulator build, say) arrives without its exec bit;
  *  give it one so it runs from the file manager or a launcher. */
 function markExecutable(file: string): void {
@@ -704,15 +729,23 @@ export async function startDownload(
     }
 
     if (!isZip && !is7z) {
-      // Not an archive — auto-extract platform but plain file: move to install path
-      const finalPath = path.join(installPath, fileName);
+      // Not an archive (an emulator's AppImage, a one-file Switch game): it still
+      // gets a folder of its own under the install path, like an archive's contents.
+      const gameFolder = singleFileFolder(installPath, rom, fileName);
+      const finalPath = path.join(gameFolder, fileName);
       if (path.resolve(finalPath) !== path.resolve(filePath)) {
-        moveFile(filePath, finalPath); // the staging folder may be on another drive
+        const previous = findDownload(rom.id);
+        // Clear the name first: the download itself may sit where the folder goes
+        const moving = `${filePath}.knarr-moving`;
+        fs.renameSync(filePath, moving);
+        fs.mkdirSync(gameFolder, { recursive: true });
+        moveFile(moving, finalPath); // the staging folder may be on another drive
         filePath = finalPath;
+        dropPreviousFile(previous, installPath, gameFolder, finalPath);
       }
       markExecutable(filePath);
-      upsertRecord({ romId: rom.id, romName: rom.name, fileName, filePath, platformId: rom.platformId, size: downloaded, downloadedAt: Date.now() });
-      emit({ status: 'complete', percent: 100, path: filePath });
+      upsertRecord({ romId: rom.id, romName: rom.name, fileName, filePath: gameFolder, platformId: rom.platformId, size: downloaded, downloadedAt: Date.now() });
+      emit({ status: 'complete', percent: 100, path: gameFolder });
       return;
     }
 

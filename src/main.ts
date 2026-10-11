@@ -914,6 +914,16 @@ function registerIpc(): void {
     const emuRec = setup?.emulator?.romId ? downloads.findDownload(setup.emulator.romId) : undefined;
     return { ...res, emulator: emuRec?.romName || res.emulator };
   });
+  // Open an emulator on its own: the one a platform plays with, or an installed emulator entry
+  ipcMain.handle('emulator:open', async (_e, target: { platformId?: number; romId?: number }) => {
+    const emu = target.platformId
+      ? config.getPublicConfig().platforms[String(target.platformId)]?.emulator
+      : target.romId ? { romId: Number(target.romId), args: '' } : undefined;
+    const res = await emulators.openEmulator(emu, downloads.findDownload);
+    if (!res.ok) return res;
+    const emuRec = emu?.romId ? downloads.findDownload(emu.romId) : undefined;
+    return { ...res, emulator: emuRec?.romName || res.emulator };
+  });
   ipcMain.handle('emulator:suggestArgs', (_e, program: string) => emulators.suggestArgs(String(program || '')));
 
   // Firmware from RomM: how many files per platform, and "Get firmware" into <games>/firmware

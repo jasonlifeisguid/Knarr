@@ -199,7 +199,30 @@ function isEmulatedInstall(rom) {
   return state.downloads.has(rom.id) && !isPcInstall(rom) && Boolean(platformSetup(rom.platform_id).emulator);
 }
 
-const canPlay = (rom) => isPcInstall(rom) || isEmulatedInstall(rom);
+const isEmulatorsPlatform = (platformId) =>
+  (state.platforms.find((p) => p.id === platformId)?.fs_slug || '').toLowerCase() === 'emulators';
+
+/** An installed emulator from the `emulators` platform that isn't a Windows program
+ *  (an AppImage, a .app): its Play opens it. A Windows build is a PC install already. */
+function isEmulatorEntry(rom) {
+  return state.downloads.has(rom.id) && isEmulatorsPlatform(rom.platform_id) && !isPcInstall(rom);
+}
+
+const canPlay = (rom) => isPcInstall(rom) || isEmulatedInstall(rom) || isEmulatorEntry(rom);
+
+/** The emulator a platform plays with, by name ("Eden - Linux"), or '' if none is set. */
+function platformEmulatorName(platformId) {
+  const emu = platformSetup(platformId).emulator;
+  if (!emu) return '';
+  return emu.romId ? (state.downloads.get(emu.romId)?.romName || 'emulator') : baseName(emu.path);
+}
+
+/** Open an emulator on its own (no game): the platform's, or an installed emulator entry. */
+async function openEmulator(target) {
+  const res = await window.knarr.openEmulator(target);
+  if (res.ok) toast(`Opening ${res.emulator}…`, 'success');
+  else toast(res.error, 'error');
+}
 
 async function setAssetSrc(img, romId, serverPath) {
   if (!serverPath) return;
@@ -481,7 +504,7 @@ function makeBadge(rom) {
   if (canPlay(rom)) {
     badge.classList.add('playable');
     const rec = state.downloads.get(rom.id);
-    badge.title = isEmulatedInstall(rom) || rec?.defaultExe ? 'Play' : 'Play (choose executable)';
+    badge.title = isEmulatorEntry(rom) ? 'Open' : isEmulatedInstall(rom) || rec?.defaultExe ? 'Play' : 'Play (choose executable)';
     badge.addEventListener('click', (e) => { e.stopPropagation(); playGame(rom); });
   } else {
     badge.title = 'Installed';
@@ -596,21 +619,27 @@ function showContextMenu(e, rom) {
   };
 
   item('Details…', () => openDetail(rom));
+  const emuName = platformEmulatorName(rom.platform_id);
+  const openEmu = () => { if (emuName) item(`Open ${emuName}`, () => openEmulator({ platformId: rom.platform_id })); };
   const progress = state.progress.get(rom.id);
   const downloaded = state.downloads.has(rom.id);
   if (progress) {
     item('Cancel download', () => window.knarr.cancelDownload(rom.id), true);
+    openEmu();
   } else if (downloaded) {
     if (isEmulatedInstall(rom)) item('Play', () => playGame(rom));
+    if (isEmulatorEntry(rom)) item('Open', () => playGame(rom));
     if (isPcInstall(rom)) {
       item('Play', () => playGame(rom));
       item('Choose executable…', () => openExePicker(rom));
       item('Add to Steam / Shortcut…', () => openExePicker(rom));
     }
+    openEmu();
     item('Saves & Folders…', () => openFoldersModal(rom));
     item('Delete from disk', () => deleteDownloadFor(rom), true);
   } else {
     item('Download', () => quickDownload(rom));
+    openEmu();
   }
 
   menu.hidden = false;
@@ -1153,7 +1182,11 @@ function refreshDetailActions() {
   shortcutBtn.hidden = !pcInstall;
   playBtn.hidden = !(canPlay(rom) && !inQueue);
   $('btn-folders').hidden = !(record && record.filePath && !inQueue);
-  playBtn.innerHTML = icon('play') + (isEmulatedInstall(rom) || record?.defaultExe ? ' Play' : ' Play…');
+  playBtn.innerHTML = icon('play') + (isEmulatorEntry(rom) ? ' Open' : isEmulatedInstall(rom) || record?.defaultExe ? ' Play' : ' Play…');
+  // The emulator this platform plays with, opened on its own (setup, its own library)
+  const emuName = platformEmulatorName(rom.platform_id);
+  $('btn-open-emu').hidden = !emuName;
+  $('btn-open-emu').textContent = `Open ${emuName}`;
   // What Play actually runs — and a way back to the picker when it's the wrong exe
   const exeRow = $('detail-exe-row');
   const showExe = Boolean(pcInstall && record.defaultExe);
@@ -1454,6 +1487,7 @@ async function playFromPicker() {
 
 /** Play a downloaded game: launch its default exe, or pick one first. */
 async function playGame(rom) {
+  if (isEmulatorEntry(rom)) { await openEmulator({ romId: rom.id }); return; }
   if (isEmulatedInstall(rom)) {
     const res = await window.knarr.launchEmulated(rom.id);
     if (res.ok) toast(`Launching ${rom.name || rom.fs_name} with ${res.emulator}…`, 'success');
@@ -2793,6 +2827,7 @@ $('exe-setdefault').addEventListener('click', setDefaultFromPicker);
 $('exe-clear').addEventListener('click', clearDefaultFromPicker);
 $('btn-change-exe').addEventListener('click', () => state.detailRom && openExePicker(state.detailRom));
 $('btn-play').addEventListener('click', () => state.detailRom && playGame(state.detailRom));
+$('btn-open-emu').addEventListener('click', () => state.detailRom && openEmulator({ platformId: state.detailRom.platform_id }));
 
 $('btn-platforms').addEventListener('click', () => { closeSettings(); openPlatformsModal(); });
 $('pf-close').addEventListener('click', closePlatformsModal);

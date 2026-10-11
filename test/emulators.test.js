@@ -225,3 +225,18 @@ test('getFirmware: a server file name can\'t write outside the folder; no folder
   await assert.rejects(firmware.getFirmware(romm, 5, ''), /Set a folder or install path/);
   await assert.rejects(firmware.getFirmware(romm, 6, dest), /no firmware for this platform/);
 });
+
+test('openEmulator starts the emulator with no game, from its folder; an unset or missing emulator is an error', { skip: process.platform === 'win32' }, async () => {
+  const root = tree({ 'Eden - Linux/Eden.AppImage': '' });
+  const prog = path.join(root, 'Eden - Linux', 'Eden.AppImage');
+  const out = path.join(root, 'out.txt');
+  fs.writeFileSync(prog, `#!/bin/sh\nprintf '%s|%s' "$PWD" "$#" > "${out}"\n`);
+  const find = (id) => (id === 3 ? { filePath: path.join(root, 'Eden - Linux') } : undefined);
+  const res = await emulators.openEmulator({ romId: 3, args: '-f -g {rom}' }, find);
+  assert.equal(res.ok, true, res.error);
+  assert.equal(res.emulator, 'Eden.AppImage');
+  for (let i = 0; i < 50 && !fs.existsSync(out); i++) await new Promise((r) => setTimeout(r, 20));
+  assert.equal(fs.readFileSync(out, 'utf8'), `${path.join(root, 'Eden - Linux')}|0`, 'no arguments, not even the platform\'s');
+  assert.match((await emulators.openEmulator(undefined, find)).error, /No emulator is set/);
+  assert.match((await emulators.openEmulator({ romId: 9, args: '' }, find)).error, /isn't installed/);
+});

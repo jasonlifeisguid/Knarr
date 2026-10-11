@@ -179,14 +179,39 @@ export async function launchEmulated(
   const game = pickGameFile(installed);
   if (!game) return { ok: false, error: `No game file found in ${installed}` };
   const template = emu?.args || suggestArgs(prog.program);
-  const { command, args } = buildCommand(prog.program, buildArgs(template, game), platform);
-  if (platform !== 'win32' && /\.appimage$/i.test(prog.program)) {
-    try { fs.chmodSync(prog.program, 0o755); } catch { /* best effort */ }
+  const res = await startProgram(prog.program, buildArgs(template, game), { ...opts, platform });
+  return res.ok ? { ...res, game: path.basename(game) } : res;
+}
+
+/**
+ * Open the emulator on its own — no game — to set it up or use its own library.
+ * Not followed as a game: Knarr stays where it is.
+ */
+export async function openEmulator(
+  emu: EmulatorSetup | undefined,
+  findRecord: RecordLookup,
+  opts: { spawnFn?: typeof spawn; platform?: NodeJS.Platform } = {}
+): Promise<EmulatedLaunch> {
+  const platform = opts.platform ?? process.platform;
+  const prog = resolveProgram(emu, findRecord, platform);
+  if (!prog.ok) return { ok: false, error: prog.error };
+  return startProgram(prog.program, [], { ...opts, platform });
+}
+
+/** Start a program detached, from its own folder, outside Knarr's AppImage environment. */
+async function startProgram(
+  program: string,
+  programArgs: string[],
+  opts: { onExit?: () => void; spawnFn?: typeof spawn; platform: NodeJS.Platform }
+): Promise<EmulatedLaunch> {
+  const { command, args } = buildCommand(program, programArgs, opts.platform);
+  if (opts.platform !== 'win32' && /\.appimage$/i.test(program)) {
+    try { fs.chmodSync(program, 0o755); } catch { /* best effort */ }
   }
   let child;
   try {
     child = (opts.spawnFn ?? spawn)(command, args, {
-      cwd: path.dirname(prog.program),
+      cwd: path.dirname(program),
       detached: true,
       stdio: 'ignore',
       windowsHide: false,
@@ -197,7 +222,7 @@ export async function launchEmulated(
   }
   if (opts.onExit) { const onExit = opts.onExit; child.on('exit', () => onExit()); }
   const err = await whenSpawned(child);
-  if (err) return { ok: false, error: `Could not start ${path.basename(prog.program)}: ${err.message}` };
+  if (err) return { ok: false, error: `Could not start ${path.basename(program)}: ${err.message}` };
   child.unref();
-  return { ok: true, pid: child.pid, emulator: path.basename(prog.program), game: path.basename(game) };
+  return { ok: true, pid: child.pid, emulator: path.basename(program) };
 }

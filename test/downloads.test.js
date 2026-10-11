@@ -257,6 +257,25 @@ test('a loose file from before 3.1 is tidied when the game is downloaded into it
   assert.equal(fs.readFileSync(elsewhere, 'utf8'), 'kept', 'a download kept in another folder is left alone');
 });
 
+test('records from before 3.1 learn whether they hold an exe, once; unreachable ones wait', () => {
+  const t = makeTemp();
+  const sw = path.join(t.install, 'Bayonetta 3');
+  fs.mkdirSync(sw); fs.writeFileSync(path.join(sw, 'B3 [01004A4010FEA000][v0].nsp'), 'x');
+  const pc = path.join(t.install, 'PC Game', 'bin');
+  fs.mkdirSync(pc, { recursive: true }); fs.writeFileSync(path.join(pc, 'game.exe'), 'MZ');
+  const recs = [
+    { romId: 71, romName: 'Bayonetta 3', fileName: 'x.zip', filePath: sw, platformId: PLATFORM_ID, size: 1, downloadedAt: 1 },
+    { romId: 72, romName: 'PC Game', fileName: 'y.zip', filePath: path.dirname(pc), platformId: PLATFORM_ID, size: 1, downloadedAt: 1 },
+    { romId: 73, romName: 'Chosen', fileName: 'z.zip', filePath: path.join(t.root, 'gone'), defaultExe: path.join(t.root, 'gone', 'a.exe'), platformId: PLATFORM_ID, size: 1, downloadedAt: 1 },
+    { romId: 74, romName: 'Offline', fileName: 'w.zip', filePath: path.join(t.root, 'unmounted', 'W'), platformId: PLATFORM_ID, size: 1, downloadedAt: 1 },
+  ];
+  fs.writeFileSync(path.join(t.userData, 'downloads.json'), JSON.stringify(recs));
+  const byId = Object.fromEntries(downloads.listDownloads().map((r) => [r.romId, r.hasExe]));
+  assert.deepEqual(byId, { 71: false, 72: true, 73: true, 74: undefined });
+  const saved = JSON.parse(fs.readFileSync(path.join(t.userData, 'downloads.json'), 'utf8'));
+  assert.equal(saved.find((r) => r.romId === 71).hasExe, false, 'remembered');
+});
+
 test('AppImage on a plain-download platform is made executable too; other files are not', async () => {
   const t = makeTemp();
   const img = path.join(t.root, 'Tool.AppImage');

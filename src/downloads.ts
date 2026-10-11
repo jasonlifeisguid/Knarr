@@ -160,7 +160,21 @@ function saveRecords(records: DownloadRecord[]): void {
 }
 
 export function listDownloads(): DownloadRecord[] {
-  return loadRecords();
+  const records = loadRecords();
+  // Records from before 3.1 don't say whether the install holds a Windows .exe.
+  // Look once and remember, so a Switch folder downloaded with 3.0 isn't taken
+  // for a PC game (exe picker instead of Play with). A chosen exe settles it
+  // without a scan; an install that can't be seen right now (unmounted drive) waits.
+  let changed = false;
+  for (const r of records) {
+    if (r.hasExe !== undefined || !r.filePath) continue;
+    if (r.defaultExe) r.hasExe = true;
+    else if (fs.existsSync(r.filePath)) r.hasExe = containsExe(r.filePath);
+    else continue;
+    changed = true;
+  }
+  if (changed) saveRecords(records);
+  return records;
 }
 
 export function findDownload(romId: number): DownloadRecord | undefined {

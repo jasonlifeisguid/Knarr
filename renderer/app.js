@@ -287,10 +287,13 @@ function renderPlatforms() {
 
   const installed = state.installedOnly ? installedCounts() : null;
   for (const p of platforms) {
+    const installedHere = installed ? (installed.get(p.id) || 0) : 0;
+    // ✓ Installed: platforms with nothing on disk drop out of the list — except
+    // the one being viewed, which stays (faded) until you move on.
+    if (installed && installedHere === 0 && p.id !== state.currentPlatformId) continue;
     const isPinned = state.pinned.includes(p.id);
     const btn = document.createElement('button');
     btn.className = 'platform-item' + (p.id === state.currentPlatformId ? ' active' : '');
-    const installedHere = installed ? (installed.get(p.id) || 0) : 0;
     if (installed && installedHere === 0) btn.classList.add('no-installed');
     btn.addEventListener('click', () => selectPlatform(p.id));
 
@@ -314,6 +317,7 @@ function renderPlatforms() {
     btn.append(pin, name, count);
     list.appendChild(btn);
   }
+  if (!list.children.length) list.innerHTML = '<p class="muted pad">Nothing installed yet. Turn off ✓ Installed to see every platform.</p>';
   // The list is rebuilt from scratch, so a controller ring living on one of the
   // old buttons went with it — put it back on the same position.
   if (gp.active && gp.zone === 'sidebar') gpRefocus();

@@ -23,6 +23,7 @@ import * as cli from './cli';
 import * as brand from './brand';
 import * as emulators from './emulators';
 import * as firmware from './firmware';
+import * as emusaves from './emusaves';
 
 // Cover art and screenshots are served to the renderer over a private scheme
 // that maps only onto the covers cache directory, so the renderer's CSP no
@@ -489,7 +490,17 @@ const gameFolders = (romId: number) => {
   if (!rec || !rec.filePath) return { gameFolder: null as string | null, exe: null as string | null, prefixes: [] as prefixes.PrefixInfo[] };
   const exe = rec.defaultExe && fs.existsSync(rec.defaultExe) ? rec.defaultExe : null;
   let found: prefixes.PrefixInfo[] = [];
-  if (exe) {
+  const emu = emuSavesFor(romId);
+  if (emu) {
+    // Played with an emulator: its save folder for this game is the one "prefix"
+    if ('dir' in emu) {
+      const own = emusaves.gameFolders(emu);
+      found = [{
+        source: 'emulator', label: emu.label, root: emu.dir,
+        folders: own.length ? own.map((p) => ({ label: path.basename(p), path: p })) : [{ label: 'Save folder', path: emu.dir }],
+      }];
+    }
+  } else if (exe) {
     const steamAppId = process.platform === 'linux' ? steam.readShortcutAppId(exe) : null;
     found = prefixes.resolvePrefixes(exe, { steamAppId, steamRoot: steam.findSteamRoot() });
   } else if (process.platform === 'win32') {
@@ -501,7 +512,28 @@ const gameFolders = (romId: number) => {
 
 // ── Cloud saves (RomM) ─────────────────────────────────────────────────────
 
+/**
+ * An installed game played with an emulator: where that emulator keeps its
+ * saves (emusaves.ts), an error saying why it can't be found, or null for a
+ * game that isn't played with a known emulator (PC games, or other platforms).
+ */
+function emuSavesFor(romId: number): emusaves.EmuSaveDir | { error: string } | null {
+  const rec = downloads.findDownload(romId);
+  if (!rec?.filePath || rec.hasExe !== false) return null;
+  const emu = config.getPublicConfig().platforms[String(rec.platformId)]?.emulator;
+  if (!emu) return null;
+  const prog = emulators.resolveProgram(emu, downloads.findDownload);
+  const kind = prog.ok ? emusaves.emulatorKind(prog.program) : null;
+  if (!prog.ok || !kind) return null;
+  if (process.platform !== 'linux') return { error: 'Emulator saves are found on Linux only for now' };
+  const titleId = emusaves.gameTitleId(kind, rec.filePath);
+  if (!titleId) return { error: 'This game\'s title id could not be read from its files' };
+  return emusaves.locateSaveDir(kind, titleId, emusaves.realSaveEnv(path.dirname(prog.program)));
+}
+
 function saveRulesFor(romId: number): saves.SaveRules {
+  // An emulator's save folder holds only the game's saves: keep every file
+  if (emuSavesFor(romId)) return { configExcludes: [], includeConfig: true };
   const cfg = config.getPublicConfig();
   const rec = downloads.findDownload(romId);
   return {
@@ -518,6 +550,7 @@ function targetFor(romId: number, root: string): saves.SaveTarget | null {
   const info = gameFolders(romId);
   const p = info.prefixes.find((x) => x.root === root);
   if (!p) return null;
+  if (p.source === 'emulator') { const emu = emuSavesFor(romId); return emu && 'dir' in emu ? emusaves.saveLayout(emu) : null; }
   return p.source === 'windows' ? saves.windowsLayout() : p.root;
 }
 const rootOf = (t: saves.SaveTarget) => (typeof t === 'string' ? t : t.profile);
@@ -566,14 +599,16 @@ function rommDeviceId(): Promise<string> {
 }
 
 async function cloudDeps(romId: number): Promise<cloud.CloudDeps> {
+  const emu = emuSavesFor(romId);
   return {
+    emulator: emu && 'dir' in emu ? emu.kind : undefined,
     client: getClient(),
     rules: () => saveRulesFor(romId),
     deviceId: (await rommDeviceId()) || null,
     getRecord: () => downloads.findDownload(romId)?.cloud ?? null,
     setRecord: (rec) => { downloads.updateRecord(romId, { cloud: rec }); },
     // A restored save shows where the game writes — on Windows that becomes the scope
-    onRestored: process.platform === 'win32' ? (entries) => { addSavePaths(romId, saves.learnScope(entries), 'learned from a restore'); } : undefined,
+    onRestored: process.platform === 'win32' && !emu ? (entries) => { addSavePaths(romId, saves.learnScope(entries), 'learned from a restore'); } : undefined,
   };
 }
 
@@ -645,6 +680,8 @@ async function suggestCloudUpload(romId: number, gameName: string): Promise<void
 /** The target auto-sync is allowed to touch: the game's own prefix (never Faugus's shared
  *  default), or on Windows the real profile (scoped to the game's save locations). */
 function ownTargetFor(romId: number): saves.SaveTarget | null {
+  const emu = emuSavesFor(romId);
+  if (emu) return 'dir' in emu ? emusaves.saveLayout(emu) : null;
   const info = gameFolders(romId);
   if (process.platform === 'win32') return info.prefixes.some((p) => p.source === 'windows') ? saves.windowsLayout() : null;
   return info.prefixes.find((p) => p.source === 'faugus-game' || p.source === 'steam')?.root ?? null;
@@ -903,16 +940,32 @@ function registerIpc(): void {
   ipcMain.handle('game:launchEmulated', async (_e, romId: number) => {
     const rec = downloads.findDownload(romId);
     if (!rec || !rec.filePath) return { ok: false, error: 'This game is not installed' };
-    const setup = config.getPublicConfig().platforms[String(rec.platformId)];
+    const cfg = config.getPublicConfig();
+    const setup = cfg.platforms[String(rec.platformId)];
     const gameName = rec.romName || path.basename(rec.filePath);
+    // Cloud saves, as for a PC game: bring this machine's saves up to date
+    // first (automatic), and upload or offer to after the emulator closes.
+    const target = config.isConfigured() ? ownTargetFor(romId) : null;
+    const autoCloud = cfg.cloudSaves === 'auto' && !!target;
+    const askCloud = cfg.cloudSaves === 'ask' && !!target;
+    let cloudAction: cloud.AutoAction | undefined;
+    if (autoCloud) cloudAction = await cloud.beforeLaunch(await cloudDeps(romId), romId, target!, gameName);
     const res = await emulators.launchEmulated(rec.filePath, setup?.emulator, downloads.findDownload, {
-      onExit: () => gameExited(romId, gameName),
+      onExit: async () => {
+        gameExited(romId, gameName);
+        if (askCloud) { await suggestCloudUpload(romId, gameName); return; }
+        if (!autoCloud) return;
+        const tgt = ownTargetFor(romId);
+        if (!tgt) return;
+        const action = await cloud.afterExit(await cloudDeps(romId), romId, tgt, gameName);
+        send('cloud:event', { romId, gameName, ...action });
+      },
     });
     if (!res.ok) return res;
     gameStarted(romId, gameName, true, res.pid);
     // Name an installed emulator as RomM does ("Eden - Linux"), not by its file
     const emuRec = setup?.emulator?.romId ? downloads.findDownload(setup.emulator.romId) : undefined;
-    return { ...res, emulator: emuRec?.romName || res.emulator };
+    return { ...res, emulator: emuRec?.romName || res.emulator, cloud: cloudAction };
   });
   // Open an emulator on its own: the one a platform plays with, or an installed emulator entry
   ipcMain.handle('emulator:open', async (_e, target: { platformId?: number; romId?: number }) => {

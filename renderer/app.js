@@ -1244,7 +1244,7 @@ async function refreshDetailCloud() {
   const rom = state.detailRom;
   const row = $('detail-cloud-row');
   const rec = rom && state.downloads.get(rom.id);
-  if (!rom || !rec || !isPcInstall(rom) || queueStatusFor(rom.id)) { row.hidden = true; return; }
+  if (!rom || !rec || !(isPcInstall(rom) || isEmulatedInstall(rom)) || queueStatusFor(rom.id)) { row.hidden = true; return; }
   const st = await window.knarr.cloudOwnStatus(rom.id);
   if (state.detailRom?.id !== rom.id) return; // another game's dialog by now
   const line = st.ok && !st.unscoped ? CLOUD_LINE[st.state] : null;
@@ -1467,6 +1467,11 @@ function launchToast(rom, res) {
   else if (res.faugusRegistered) toast(`Added ${name} to Faugus with its own prefix — launching…`, 'success');
   else toast(`Launching ${name} via Faugus Launcher…`, 'success');
   if (res.faugusRegisterError) toast(`${res.faugusRegisterError}. Ran in the shared prefix this time.`, 'error');
+  cloudLaunchToasts(res);
+}
+
+/** What the automatic cloud sync did before a launch (PC game or emulator). */
+function cloudLaunchToasts(res) {
   const c = res.cloud;
   if (!c || c.action === 'none') return;
   const from = c.from ? ` from ${c.from}` : '';
@@ -1494,8 +1499,9 @@ async function playGame(rom) {
   if (isEmulatorEntry(rom)) { await openEmulator({ romId: rom.id }); return; }
   if (isEmulatedInstall(rom)) {
     const res = await window.knarr.launchEmulated(rom.id);
-    if (res.ok) toast(`Launching ${rom.name || rom.fs_name} with ${res.emulator}…`, 'success');
-    else toast(res.error, 'error');
+    if (!res.ok) { toast(res.error, 'error'); return; }
+    toast(`Launching ${rom.name || rom.fs_name} with ${res.emulator}…`, 'success');
+    cloudLaunchToasts(res);
     return;
   }
   const rec = state.downloads.get(rom.id);

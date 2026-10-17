@@ -59,6 +59,8 @@ export interface CloudDeps {
   /** Called with the restored zip's file entries, before the post-restore listing (learn a scope). */
   onRestored?: (entries: string[]) => void;
   tmpDir?: string;
+  /** RomM's `emulator` field for uploads (default CLOUD_EMULATOR): "eden", "rpcs3", … */
+  emulator?: string;
 }
 
 const rulesOf = (deps: CloudDeps): saves.SaveRules => (typeof deps.rules === 'function' ? deps.rules() : deps.rules);
@@ -265,7 +267,7 @@ async function uploadAsNewest(deps: CloudDeps, romId: number, file: string, game
   const note = `Knarr · ${gameName} · ${what} · ${new Date().toISOString()}`;
   const mark = async () => { const m = await saves.addVersionMarker(file, note); if (!m.ok) throw new Error(m.error); };
   const put = () => deps.client.uploadSave(romId, path.basename(file), fs.readFileSync(file), {
-    emulator: CLOUD_EMULATOR, slot: CLOUD_SLOT, deviceId: deps.deviceId || undefined, autocleanupLimit: KEEP_VERSIONS,
+    emulator: deps.emulator || CLOUD_EMULATOR, slot: CLOUD_SLOT, deviceId: deps.deviceId || undefined, autocleanupLimit: KEEP_VERSIONS,
   });
   if (markFirst) await mark();
   let save = await put();

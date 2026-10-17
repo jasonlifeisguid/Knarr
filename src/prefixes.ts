@@ -23,7 +23,7 @@ import * as faugus from './faugus';
 
 export interface FolderEntry { label: string; path: string; }
 export interface PrefixInfo {
-  source: 'faugus-game' | 'faugus-default' | 'steam' | 'windows';
+  source: 'faugus-game' | 'faugus-default' | 'steam' | 'windows' | 'emulator';
   label: string;
   root: string;             // the prefix root (or the profile dir on Windows)
   folders: FolderEntry[];   // only folders that exist

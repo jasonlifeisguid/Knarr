@@ -115,6 +115,21 @@ export interface SaveLayout {
   direct: boolean;
   /** The real Windows profile: never list it without a scope. */
   requireScope: boolean;
+  /** An emulator's save directory (emusaves.ts): instead of fixed `roots`, every
+   *  folder directly in `profile` whose name passes is a root, and only such
+   *  folders may come out of a restore. Read when used, so folders a restore
+   *  just created are seen. */
+  topMatch?: (name: string) => boolean;
+}
+
+/** The layout's save roots right now: fixed, or the matching folders in the profile. */
+function rootsOf(layout: SaveLayout): Record<string, string> {
+  if (!layout.topMatch) return layout.roots;
+  const out: Record<string, string> = {};
+  let names: fs.Dirent[] = [];
+  try { names = fs.readdirSync(layout.profile, { withFileTypes: true }); } catch { /* none yet */ }
+  for (const e of names) if (e.isDirectory() && !e.isSymbolicLink() && layout.topMatch(e.name)) out[e.name] = path.join(layout.profile, e.name);
+  return out;
 }
 
 /** A Proton/Wine prefix root (string) or an explicit layout. */
@@ -272,7 +287,7 @@ export function listSaveFiles(target: SaveTarget, rules: SaveRules = DEFAULT_RUL
       included.push({ rel, size: st.size, mtimeMs: st.mtimeMs });
     }
   };
-  for (const [top, dir] of Object.entries(layout.roots)) {
+  for (const [top, dir] of Object.entries(rootsOf(layout))) {
     if (mayContain(top.toLowerCase())) walk(dir, top);
   }
   included.sort((a, b) => a.rel.localeCompare(b.rel));
@@ -422,7 +437,8 @@ export async function restoreSaves(target: SaveTarget, zipFile: string, opts: { 
   if (!entries || !entries.length) return { ok: false, error: 'Not a readable zip' };
   const tops = new Set(entries.map((e) => e.split('/')[0]));
   const allowed = new Set(SAVE_FOLDERS.map((f) => f.split('/')[0]));
-  const bad = [...tops].filter((t) => !allowed.has(t) || t.includes('..'));
+  const isAllowed = layout.topMatch ?? ((t: string) => allowed.has(t));
+  const bad = [...tops].filter((t) => !isAllowed(t) || t.includes('..'));
   if (bad.length || entries.some((e) => e.split('/').includes('..'))) {
     return { ok: false, error: `Not a save backup — unexpected top-level entries: ${bad.slice(0, 3).join(', ') || '..'}` };
   }

@@ -20,6 +20,11 @@ import { listExes } from './shortcuts';
 export function suggestArgs(program: string): string {
   const name = path.basename(program).toLowerCase();
   if (name.includes('eden')) return '-f -g {rom}'; // fullscreen, then the game
+  if (name.includes('rpcs3')) return '--no-gui --fullscreen {rom}';
+  // shadPS4's Qt launcher: -d = the core version selected in it, -g the game,
+  // core options after --. Given a bare path it takes it for the core and quits.
+  if (name.includes('shadps4') && name.includes('launcher')) return '-d -g {rom} -- -f true';
+  if (name.includes('shadps4')) return '-f true -g {rom}'; // the core itself
   return '{rom}';
 }
 
@@ -83,16 +88,36 @@ const BASE_TITLE_ID = /\[01[0-9a-f]{11}000\]/i;
 /** Never the game: RomM's generated playlist for Switch folders, notes, art. */
 const NOT_A_GAME = /\.(txt|nfo|json|xml|md|jpe?g|png|webp|pdf|sfv|md5|sha1|url|ini)$/i;
 
+/** Folder dumps that boot from a known file: a PS3 disc, a PS3 digital game, a PS4 game. */
+const BOOT_FILES = [['PS3_GAME', 'USRDIR', 'EBOOT.BIN'], ['USRDIR', 'EBOOT.BIN'], ['eboot.bin']];
+
+/** `dir/a/b/c` matching each part case-insensitively (dumps vary), or null. */
+function findPath(dir: string, parts: string[]): string | null {
+  let cur = dir;
+  for (const part of parts) {
+    let names: string[];
+    try { names = fs.readdirSync(cur); } catch { return null; }
+    const hit = names.find((n) => n.toLowerCase() === part.toLowerCase());
+    if (!hit) return null;
+    cur = path.join(cur, hit);
+  }
+  try { return fs.statSync(cur).isFile() ? cur : null; } catch { return null; }
+}
+
 /**
- * The file to hand the emulator. A downloaded file is the game itself. In a
- * game folder only top-level files count (update/ and dlc/ are the emulator's
- * to find): the Switch base game, else a playlist (multi-disc), else the
- * largest file.
+ * The file to hand the emulator. A downloaded file is the game itself. A folder
+ * dump that boots from a known file (PS3 EBOOT.BIN, PS4 eboot.bin) gets that.
+ * Otherwise only top-level files count (update/ and dlc/ are the emulator's to
+ * find): the Switch base game, else a playlist (multi-disc), else the largest file.
  */
 export function pickGameFile(target: string): string | null {
   let stat: fs.Stats;
   try { stat = fs.statSync(target); } catch { return null; }
   if (stat.isFile()) return target;
+  for (const parts of BOOT_FILES) {
+    const boot = findPath(target, parts);
+    if (boot) return boot;
+  }
   let files: { name: string; full: string; size: number }[];
   try {
     files = fs.readdirSync(target, { withFileTypes: true })

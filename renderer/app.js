@@ -1854,7 +1854,8 @@ function makePlayWithRow(p, setup) {
     }
     previous = select.value;
     if (select.value && !args.value.trim()) {
-      args.value = await window.knarr.suggestEmulatorArgs(select.selectedOptions[0].title || select.selectedOptions[0].textContent);
+      const v = select.value;
+      args.value = await window.knarr.suggestEmulatorArgs(v.startsWith('rom:') ? { romId: Number(v.slice(4)) } : { path: v.slice(5) });
     }
     applyArgs();
     markDirty();

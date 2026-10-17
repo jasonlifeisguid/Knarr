@@ -924,7 +924,12 @@ function registerIpc(): void {
     const emuRec = emu?.romId ? downloads.findDownload(emu.romId) : undefined;
     return { ...res, emulator: emuRec?.romName || res.emulator };
   });
-  ipcMain.handle('emulator:suggestArgs', (_e, program: string) => emulators.suggestArgs(String(program || '')));
+  // Suggested arguments go by the program that will actually run (an emulator
+  // entry's folder may hold a launcher or the core), not the entry's name
+  ipcMain.handle('emulator:suggestArgs', (_e, emu: { romId?: number; path?: string }) => {
+    const res = emulators.resolveProgram(config.normalizeEmulator({ ...emu, args: '' }), downloads.findDownload);
+    return emulators.suggestArgs(res.ok ? res.program : '');
+  });
 
   // Firmware from RomM: how many files per platform, and "Get firmware" into <games>/firmware
   ipcMain.handle('firmware:counts', async () => {

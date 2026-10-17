@@ -50,6 +50,18 @@ test('pickGameFile: no title ids → the largest Switch file; plain names, a sin
   assert.equal(emulators.pickGameFile(path.join(big, 'missing')), null);
 });
 
+test('pickGameFile: PS3 and PS4 folder dumps boot from their EBOOT, not the biggest file', () => {
+  const ps3 = tree({
+    'PS3_DISC.SFB': 'x', 'UP0005-BLUS30767_00-DRAGONSCROWNDL00-A0109-V0100-PE.pkg': 'u'.repeat(90),
+    'PS3_GAME/USRDIR/EBOOT.BIN': 'e', 'PS3_GAME/PARAM.SFO': 's', 'PS3_UPDATE/PS3UPDAT.PUP': 'p'.repeat(99),
+  });
+  assert.equal(emulators.pickGameFile(ps3), path.join(ps3, 'PS3_GAME', 'USRDIR', 'EBOOT.BIN'));
+  const digital = tree({ 'USRDIR/eboot.bin': 'e', 'PARAM.SFO': 's', 'USRDIR/data.psarc': 'd'.repeat(99) });
+  assert.equal(emulators.pickGameFile(digital), path.join(digital, 'USRDIR', 'eboot.bin'));
+  const ps4 = tree({ 'eboot.bin': 'e', 'DRACRO.CPK': 'c'.repeat(99), 'sce_sys/param.sfo': 's', 'sce_module/libc.prx': 'l' });
+  assert.equal(emulators.pickGameFile(ps4), path.join(ps4, 'eboot.bin'));
+});
+
 // ── Arguments ────────────────────────────────────────────────────────────
 
 test('buildArgs: {rom} becomes one argument even with spaces; quotes group; no {rom} → game last', () => {
@@ -65,6 +77,10 @@ test('suggestArgs knows Eden; anything else just gets the game', () => {
   assert.equal(emulators.suggestArgs('/home/u/Emulators/Eden-Linux-v0.2.1-amd64-clang-pgo.AppImage'), '-f -g {rom}');
   assert.equal(emulators.suggestArgs('Eden - Windows'), '-f -g {rom}');
   assert.equal(emulators.suggestArgs('/usr/bin/retroarch'), '{rom}');
+  assert.equal(emulators.suggestArgs('rpcs3-v0.0.43-20284-2ba2f75b_linux64.AppImage'), '--no-gui --fullscreen {rom}');
+  assert.equal(emulators.suggestArgs('shadPS4QtLauncher-qt.AppImage'), '-d -g {rom} -- -f true');
+  assert.equal(emulators.suggestArgs('Shadps4-sdl.AppImage'), '-f true -g {rom}');
+  assert.deepEqual(emulators.buildArgs('-d -g {rom} -- -f true', '/g/eboot.bin'), ['-d', '-g', '/g/eboot.bin', '--', '-f', 'true']);
 });
 
 test('buildCommand: a macOS .app goes through open -W; anything else runs directly', () => {

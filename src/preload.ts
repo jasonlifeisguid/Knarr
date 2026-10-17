@@ -57,7 +57,7 @@ contextBridge.exposeInMainWorld('knarr', {
   launchGame: (romId: number, exePath?: string, coverPath?: string) => ipcRenderer.invoke('game:launch', romId, exePath, coverPath),
   launchEmulated: (romId: number) => ipcRenderer.invoke('game:launchEmulated', romId),
   openEmulator: (target: { platformId?: number; romId?: number }) => ipcRenderer.invoke('emulator:open', target),
-  suggestEmulatorArgs: (program: string) => ipcRenderer.invoke('emulator:suggestArgs', program),
+  suggestEmulatorArgs: (emu: { romId?: number; path?: string }) => ipcRenderer.invoke('emulator:suggestArgs', emu),
   firmwareCounts: () => ipcRenderer.invoke('firmware:counts'),
   getFirmware: (platformId: number) => ipcRenderer.invoke('firmware:get', platformId),
   openFirmwareFolder: (platformId: number) => ipcRenderer.invoke('firmware:open', platformId),
